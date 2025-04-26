@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AR Geolocalizzata</title>
+    <link rel="stylesheet" href="styles.css">
+    
+    <!-- Babylon.js -->
+    <script src="https://cdn.babylonjs.com/babylon.js"></script>
+    <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
+    <script src="https://cdn.babylonjs.com/gui/babylon.gui.min.js"></script>
+    <script src="https://cdn.babylonjs.com/serializers/babylonjs.serializers.min.js"></script>
+    
+    <!-- Gestione della geolocalizzazione e dell'AR -->
+    <script src="scripts/geo-manager.js" defer></script>
+    <script src="scripts/ar-manager.js" defer></script>
+    <script src="scripts/app.js" defer></script>
+</head>
+<body>
+    <div class="container">
+        <div id="infoPanel">
+            <div id="statusMessage">Caricamento...</div>
+            <div id="coordinates"></div>
+            <div id="distance" class="hidden"></div>
+        </div>
+        
+        <div class="buttons">
+            <button id="getLocationBtn">Ottieni posizione</button>
+            <button id="placeObjectBtn" disabled>Posiziona oggetto qui</button>
+            <button id="startARBtn" disabled>Visualizza in AR</button>
+        </div>
+
+        <canvas id="renderCanvas" touch-action="none"></canvas>
+    </div>
+</body>
+</html>
