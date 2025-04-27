@@ -5,15 +5,103 @@ body, html {
     height: 100%;
     overflow: hidden;
     font-family: Arial, sans-serif;
+    background-color: #333; /* Dark background for the body */
 }
 
 .container {
     position: relative;
     width: 100%;
-    height: 100%;
+    height: 100vh;
+    display: grid;
+    grid-template-rows: 75% 25%;
 }
 
-#renderCanvas {
+/* Mode Selector */
+#modeSelector {
+    position: absolute; /* Keep it positioned absolutely */
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: rgba(0, 0, 0, 0.7);
+    padding: 5px;
+    border-radius: 5px;
+    z-index: 10;
+    display: flex;
+    gap: 5px;
+}
+
+.mode-btn {
+    padding: 8px 15px;
+    background-color: #555;
+    color: white;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.mode-btn.active {
+    background-color: #4CAF50;
+}
+
+/* Mode UI Containers */
+.mode-ui {
+    display: none; /* Hidden by default */
+    width: 100%;
+    height: 100%;
+    position: absolute; /* Take full space */
+    top: 0;
+    left: 0;
+    padding-top: 50px; /* Add padding to avoid overlap with modeSelector */
+    box-sizing: border-box;
+}
+
+.mode-ui.active {
+    display: flex; /* Use flex when active */
+    flex-direction: column; /* Default stacking */
+}
+
+/* Placement Mode Specifics */
+#placementModeUI.active {
+    /* Already flex column from .mode-ui.active */
+}
+
+#placementCanvasContainer {
+    position: relative;
+    background-color: #000;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
+#renderCanvasPlacement {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+#placementControls {
+    background-color: rgba(0, 0, 0, 0.8);
+    padding: 20px;
+    z-index: 5;
+    color: white;
+    overflow-y: auto;
+    box-sizing: border-box;
+    width: 100%;
+    height: 100%;
+    display: grid;
+    grid-template-rows: auto 1fr;
+    gap: 15px;
+}
+
+/* Exploration Mode Specifics */
+#explorationModeUI.active {
+    justify-content: center; /* Center content vertically */
+    align-items: center; /* Center content horizontally */
+    background-color: rgba(0, 0, 0, 0.5); /* Semi-transparent background before AR starts */
+}
+
+#renderCanvasExploration { /* Fullscreen canvas for AR */
     width: 100%;
     height: 100%;
     touch-action: none;
@@ -23,31 +111,54 @@ body, html {
     z-index: 1;
 }
 
-#infoPanel {
-    position: absolute;
-    top: 10px;
-    left: 10px;
-    background-color: rgba(0, 0, 0, 0.6);
+/* Info Panels (Common Styles) */
+#infoPanelPlacement, #infoPanelExploration {
+    background-color: rgba(20, 20, 20, 0.7); /* Slightly different background */
     color: white;
     padding: 10px;
     border-radius: 5px;
-    z-index: 2;
-    max-width: 80%;
+    margin-bottom: 10px;
+    font-size: 14px;
 }
 
-#statusMessage {
+/* Info Panel Specific Positioning */
+#infoPanelPlacement {
+    /* Positioned within #placementControls flow */
+}
+
+#infoPanelExploration {
+    position: absolute;
+    top: 60px; /* Below mode selector */
+    left: 10px;
+    z-index: 2; /* Above exploration canvas */
+    max-width: calc(100% - 20px); /* Prevent overflow */
+}
+
+/* Status Messages within Info Panels */
+#statusMessagePlacement, #statusMessageExploration {
     font-weight: bold;
     margin-bottom: 5px;
+    color: #ffcc00; /* Highlight status */
 }
 
-#directionArrow {
-    font-size: 40px;
-    height: 50px;
-    width: 50px;
-    margin: 10px auto;
-    display: flex;
-    justify-content: center;
-    align-items: center;
+/* Coordinate/Info text */
+#coordinatesPlacement, #orientationInfoPlacement, #savedDataInfoPlacement, #browserInfoPlacement,
+#coordinatesExploration, #distanceExploration, #directionExploration, #orientationInfoExploration, #savedDataInfoExploration {
+    margin-top: 3px;
+    font-size: 12px;
+    color: #eee;
+}
+
+/* Direction Arrow (Exploration) */
+#directionArrowExploration {
+    font-size: 30px; /* Slightly smaller */
+    height: 40px;
+    width: 40px;
+    margin: 5px 0; /* Adjusted margin */
+    display: inline-block; /* Allow text beside it */
+    vertical-align: middle;
+    text-align: center;
+    line-height: 40px;
     background-color: rgba(0, 0, 0, 0.2);
     border-radius: 50%;
     color: #ffcc00;
@@ -55,44 +166,37 @@ body, html {
     transition: transform 0.2s ease-out;
 }
 
-.orientation-active #directionArrow {
-    animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-    0% {
-        transform: scale(1);
-    }
-    50% {
-        transform: scale(1.1);
-    }
-    100% {
-        transform: scale(1);
-    }
-}
-
-.buttons {
-    position: absolute;
-    bottom: 20px;
-    left: 0;
-    width: 100%;
+/* Buttons Container */
+/* Use specific IDs or classes if needed, otherwise apply to .buttons within each mode */
+#placementControls .buttons {
     display: flex;
     justify-content: center;
-    flex-wrap: wrap;
+    align-items: flex-end;
     gap: 10px;
-    z-index: 2;
-    padding: 0 10px;
 }
 
+#placementControls .model-selection {
+    margin-bottom: 0;
+}
+
+#placeObjectBtn {
+    grid-row: 2;
+    align-self: end;
+    justify-self: center;
+    padding: 12px 25px;
+    font-size: 16px;
+}
+
+/* General Button Styles */
 button {
-    padding: 12px 20px;
+    padding: 10px 15px; /* Slightly smaller padding */
     background-color: #4CAF50;
     color: white;
     border: none;
     border-radius: 5px;
-    font-size: 16px;
+    font-size: 14px; /* Slightly smaller font */
     cursor: pointer;
-    margin-bottom: 10px;
+    margin-bottom: 5px; /* Reduced margin */
 }
 
 button:disabled {
@@ -108,62 +212,200 @@ button:disabled {
     background-color: #d32f2f;
 }
 
-.hidden {
-    display: none;
+.info-btn {
+    background-color: #2196F3;
 }
 
-.model-selection {
-    position: absolute;
-    top: 120px;
-    left: 10px;
-    background-color: rgba(0, 0, 0, 0.6);
-    color: white;
-    padding: 10px;
-    border-radius: 5px;
-    z-index: 2;
-    max-width: 80%;
+.info-btn:hover {
+    background-color: #0b7dda;
 }
 
-.model-selection label {
+/* Model Selection (within Placement Controls) */
+#placementControls .model-selection {
+    background-color: transparent; /* Remove background */
+    padding: 0; /* Remove padding */
+    margin-bottom: 10px;
+    position: static; /* Remove absolute positioning */
+    max-width: none; /* Remove max-width */
+    z-index: auto;
+}
+
+#placementControls .model-selection label {
     display: block;
     margin-bottom: 5px;
+    font-size: 14px;
 }
 
-.model-selection select {
+#placementControls .model-selection select {
     width: 100%;
     padding: 8px;
     border-radius: 3px;
     margin-bottom: 10px;
-    background-color: #333;
+    background-color: #555; /* Darker background for select */
     color: white;
-    border: 1px solid #555;
+    border: 1px solid #777;
+    box-sizing: border-box;
 }
 
-.file-upload {
+#placementControls .file-upload {
     margin-top: 10px;
 }
 
-.file-upload input {
+#placementControls .file-upload label {
+    font-size: 12px;
+}
+
+#placementControls .file-upload input {
     width: 100%;
     margin-top: 5px;
     color: white;
+    font-size: 12px;
 }
 
-#orientationInfo, #savedDataInfo {
+/* Hidden Class */
+.hidden {
+    display: none !important; /* Use important to ensure override */
+}
+
+/* --- Remove or comment out old/unused styles --- */
+/*
+#infoPanel { ... }
+#statusMessage { ... }
+#directionArrow { ... }
+.buttons { ... } (original absolute positioned one)
+.model-selection { ... } (original absolute positioned one)
+#orientationInfo, #savedDataInfo, #browserInfo { ... } (original ones)
+#renderCanvas { ... } (original one)
+*/
+
+/* Stili per notifiche e avvisi (Keep as is) */
+.notification {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    background-color: #ff9800;
+    color: white;
+    text-align: center;
+    padding: 10px;
+    z-index: 1000;
+}
+
+.close-notification {
+    background-color: rgba(255, 255, 255, 0.3);
+    border: none;
+    color: white;
+    padding: 5px 10px;
+    border-radius: 3px;
+    margin-left: 10px;
+    cursor: pointer;
+}
+
+/* Stili per le opzioni di fallback (Keep as is) */
+.fallback-options {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 20px;
+    border-radius: 10px;
+    z-index: 1000;
+    width: 80%;
+    max-width: 400px;
+    text-align: center;
+}
+
+.fallback-options h3 {
+    margin-top: 0;
+    color: #ff9800;
+}
+
+.fallback-options button {
+    margin: 10px 5px;
+}
+
+/* Banner di avviso browser (Keep as is) */
+.warning-banner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    background-color: #f44336;
+    color: white;
+    text-align: center;
+    padding: 10px;
+    z-index: 1000;
+}
+
+.warning-banner button {
+    background-color: white;
+    color: #f44336;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 3px;
     margin-top: 5px;
-    font-size: 12px;
-    color: #ccc;
+    cursor: pointer;
+}
+
+/* New Controls Section Styles */
+.controls-section {
+    padding: 10px;
+    background-color: rgba(0, 0, 0, 0.5);
+    border-radius: 8px;
+    margin: 5px 0;
+}
+
+.controls-section .model-selection {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.controls-section .model-selection label {
+    font-size: 16px;
+    color: #fff;
+}
+
+.controls-section .model-selection select {
+    width: 100%;
+    padding: 8px;
+    border-radius: 4px;
+    background-color: #444;
+    color: white;
+    border: 1px solid #666;
+}
+
+#placeObjectBtn {
+    width: 100%;
+    padding: 12px;
+    font-size: 16px;
+    background-color: #4CAF50;
+    border: none;
+    border-radius: 4px;
+    color: white;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+#placeObjectBtn:hover:not(:disabled) {
+    background-color: #45a049;
 }
 
 /* Responsive adjustments for mobile */
 @media (max-width: 768px) {
-    .buttons {
+    #placementControls .buttons, #explorationModeUI .buttons {
         flex-direction: column;
         align-items: center;
     }
-    
-    button {
+
+    #placementControls .buttons button, #explorationModeUI .buttons button {
         width: 90%;
         max-width: 300px;
+    }
+
+    #placementControls {
+        max-height: 60%; /* Allow more space for controls on smaller screens */
     }
 }

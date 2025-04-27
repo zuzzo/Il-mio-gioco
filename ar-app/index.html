@@ -12,6 +12,9 @@
     <script src="https://cdn.babylonjs.com/gui/babylon.gui.min.js"></script>
     <script src="https://cdn.babylonjs.com/serializers/babylonjs.serializers.min.js"></script>
     
+    <!-- Meta tag per forzare HTTPS -->
+    <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
+    
     <!-- Gestione della geolocalizzazione e dell'AR -->
     <script src="scripts/geo-manager.js" defer></script>
     <script src="scripts/ar-manager.js" defer></script>
@@ -19,7 +22,55 @@
 </head>
 <body>
     <div class="container">
-        <div id="infoPanel">
+        <!-- Mode Selection -->
+        <div id="modeSelector">
+            <button id="switchToPlacementBtn" class="mode-btn active">Modalità Piazzamento</button>
+            <button id="switchToExplorationBtn" class="mode-btn">Modalità Esplorazione</button>
+        </div>
+
+        <!-- Placement Mode UI -->
+        <div id="placementModeUI" class="mode-ui active">
+            <div id="placementCanvasContainer">
+                <canvas id="renderCanvasPlacement" touch-action="none"></canvas>
+            </div>
+        </div>
+        <div id="placementControls" class="mode-ui active">
+            <div class="controls-section">
+                <div class="model-selection">
+                    <label for="model-select">Oggetti:</label>
+                    <select id="model-select">
+                        <option value="assets/models/treasure.glb">Forziere</option>
+                        <option value="assets/models/key.glb">Chiave</option>
+                        <option value="assets/models/door.glb">Porta</option>
+                    </select>
+                </div>
+            </div>
+            <div class="controls-section">
+                <button id="placeObjectBtn" disabled>Posiziona</button>
+            </div>
+        </div>
+
+        <!-- Exploration Mode UI -->
+        <div id="explorationModeUI" class="mode-ui">
+             <div id="infoPanelExploration">
+                <div id="statusMessageExploration">Pronto per esplorare.</div>
+                <div id="coordinatesExploration"></div>
+                <div id="distanceExploration" class="hidden"></div>
+                <div id="directionExploration" class="hidden"></div>
+                <div id="directionArrowExploration" class="hidden">↑</div>
+                <div id="orientationInfoExploration" class="hidden"></div>
+                 <div id="savedDataInfoExploration" class="hidden"></div>
+            </div>
+            <div class="buttons">
+                <button id="startExplorationBtn">Avvia Esplorazione AR</button>
+            </div>
+        </div>
+
+        <!-- Fullscreen Canvas for Exploration AR (initially hidden) -->
+        <canvas id="renderCanvasExploration" touch-action="none" class="hidden"></canvas>
+
+        <!-- Original elements to be moved/removed -->
+        <div id="infoPanel" style="display: none;"> <!-- Hide original temporarily -->
             <div id="statusMessage">Caricamento...</div>
             <div id="coordinates"></div>
             <div id="distance" class="hidden"></div>
@@ -27,31 +78,52 @@
             <div id="directionArrow" class="hidden">↑</div>
             <div id="orientationInfo" class="hidden"></div>
             <div id="savedDataInfo" class="hidden"></div>
-        </div>
-        
-        <div class="model-selection">
-            <label for="model-select">Seleziona oggetto 3D:</label>
-            <select id="model-select">
-                <option value="assets/models/treasure.glb">Forziere</option>
-                <option value="assets/models/key.glb">Chiave</option>
-                <option value="assets/models/door.glb">Porta</option>
-                <option value="assets/models/custom.glb">Oggetto personalizzato</option>
-            </select>
-            
-            <div class="file-upload hidden">
-                <label for="custom-model">Carica modello 3D (.glb):</label>
-                <input type="file" id="custom-model" accept=".glb,.gltf">
-            </div>
-        </div>
-        
-        <div class="buttons">
-            <button id="getLocationBtn">Ottieni posizione</button>
-            <button id="placeObjectBtn" disabled>Posiziona oggetto qui</button>
-            <button id="startARBtn" disabled>Visualizza in AR</button>
-            <button id="clearDataBtn" class="danger-btn">Cancella dati salvati</button>
+            <div id="browserInfo" class="hidden"></div>
         </div>
 
-        <canvas id="renderCanvas" touch-action="none"></canvas>
+        <!-- Moved model-selection inside placementControls -->
+        <div id="placementControls">
+             <div id="infoPanelPlacement">
+                 <div id="statusMessagePlacement">Caricamento...</div>
+                 <div id="coordinatesPlacement"></div>
+                 <!-- Elements from original infoPanel moved here -->
+                 <div id="orientationInfoPlacement" class="hidden"></div>
+                 <div id="savedDataInfoPlacement" class="hidden"></div>
+                 <div id="browserInfoPlacement" class="hidden"></div> <!-- Renamed browserInfo -->
+             </div>
+             <div class="model-selection">
+                 <label for="model-select">Seleziona oggetto 3D:</label>
+                 <select id="model-select">
+                     <option value="assets/models/treasure.glb">Forziere</option>
+                     <option value="assets/models/key.glb">Chiave</option>
+                     <option value="assets/models/door.glb">Porta</option>
+                     <option value="assets/models/custom.glb">Oggetto personalizzato</option>
+                 </select>
+
+                 <div class="file-upload hidden">
+                     <label for="custom-model">Carica modello 3D (.glb):</label>
+                     <input type="file" id="custom-model" accept=".glb,.gltf">
+                 </div>
+             </div>
+             <div class="buttons">
+                 <button id="getLocationBtn">Ottieni posizione</button>
+                 <button id="placeObjectBtn" disabled>Piazza Oggetto</button> <!-- Text updated -->
+                 <button id="clearDataBtn" class="danger-btn">Cancella Tutti gli Oggetti</button> <!-- Text updated -->
+                 <button id="debugBtn" class="info-btn">Debug</button>
+                 <!-- Removed startARBtn -->
+             </div>
+        </div>
+
+
+        <!-- Removed original buttons div -->
+
+        <!-- Removed original renderCanvas -->
+    </div>
+
+    <!-- Notifiche browser -->
+    <div id="browserNotification" class="notification hidden">
+        <p>Per una migliore esperienza, è consigliato utilizzare Microsoft Edge o Google Chrome su dispositivi Android.</p>
+        <button class="close-notification">Chiudi</button>
     </div>
 </body>
 </html>
