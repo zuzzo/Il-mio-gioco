@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AR Geolocalizzata</title>
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"> <!-- Font Awesome for icons -->
     
     <!-- Babylon.js -->
     <script src="https://cdn.babylonjs.com/babylon.js"></script>
@@ -22,6 +23,34 @@
 </head>
 <body>
     <div class="container">
+        <!-- Hamburger Menu Icon -->
+        <div id="hamburger-icon">
+            <i class="fas fa-bars"></i>
+        </div>
+
+        <!-- Side Menu (initially hidden) -->
+        <div id="side-menu" class="hidden">
+            <a href="#" id="menu-get-location"><i class="fas fa-map-marker-alt"></i> Ottieni Posizione</a>
+            <div class="menu-model-selection">
+                 <label for="menu-model-select"><i class="fas fa-cube"></i> Oggetto:</label>
+                 <select id="menu-model-select">
+                     <option value="assets/models/treasure.glb">Forziere</option>
+                     <option value="assets/models/key.glb">Chiave</option>
+                     <option value="assets/models/door.glb">Porta</option>
+                     <option value="assets/models/custom.glb">Personalizzato</option>
+                 </select>
+                 <div class="menu-file-upload hidden">
+                     <label for="menu-custom-model">Carica .glb:</label>
+                     <input type="file" id="menu-custom-model" accept=".glb,.gltf">
+                 </div>
+            </div>
+            <a href="#" id="menu-place-object" class="disabled"><i class="fas fa-thumbtack"></i> Piazza Oggetto</a>
+            <a href="#" id="menu-toggle-ar" class="disabled"><i class="fas fa-vr-cardboard"></i> Avvia/Ferma AR</a>
+            <a href="#" id="menu-clear-data" class="danger-link"><i class="fas fa-trash-alt"></i> Cancella Dati</a>
+            <a href="#" id="menu-debug" class="info-link"><i class="fas fa-bug"></i> Debug</a>
+            <a href="#" id="close-menu"><i class="fas fa-times"></i> Chiudi Menu</a>
+        </div>
+
         <!-- Mode Selection -->
         <div id="modeSelector">
             <button id="switchToPlacementBtn" class="mode-btn active">Modalità Piazzamento</button>
@@ -45,9 +74,7 @@
                     </select>
                 </div>
             </div>
-            <div class="controls-section">
-                <button id="placeObjectBtn" disabled>Posiziona</button>
-            </div>
+            <!-- Removed placeObjectBtn from here -->
         </div>
 
         <!-- Exploration Mode UI -->
@@ -61,9 +88,7 @@
                 <div id="orientationInfoExploration" class="hidden"></div>
                  <div id="savedDataInfoExploration" class="hidden"></div>
             </div>
-            <div class="buttons">
-                <button id="startExplorationBtn">Avvia Esplorazione AR</button>
-            </div>
+            <!-- Removed buttons div from here -->
         </div>
 
         <!-- Fullscreen Canvas for Exploration AR (initially hidden) -->
@@ -91,31 +116,9 @@
                  <div id="savedDataInfoPlacement" class="hidden"></div>
                  <div id="browserInfoPlacement" class="hidden"></div> <!-- Renamed browserInfo -->
              </div>
-             <div class="model-selection">
-                 <label for="model-select">Seleziona oggetto 3D:</label>
-                 <select id="model-select">
-                     <option value="assets/models/treasure.glb">Forziere</option>
-                     <option value="assets/models/key.glb">Chiave</option>
-                     <option value="assets/models/door.glb">Porta</option>
-                     <option value="assets/models/custom.glb">Oggetto personalizzato</option>
-                 </select>
-
-                 <div class="file-upload hidden">
-                     <label for="custom-model">Carica modello 3D (.glb):</label>
-                     <input type="file" id="custom-model" accept=".glb,.gltf">
-                 </div>
-             </div>
-             <div class="buttons">
-                 <button id="getLocationBtn">Ottieni posizione</button>
-                 <button id="placeObjectBtn" disabled>Piazza Oggetto</button> <!-- Text updated -->
-                 <button id="clearDataBtn" class="danger-btn">Cancella Tutti gli Oggetti</button> <!-- Text updated -->
-                 <button id="debugBtn" class="info-btn">Debug</button>
-                 <!-- Removed startARBtn -->
-             </div>
+             <!-- Removed model-selection div from here -->
+             <!-- Removed buttons div from here -->
         </div>
-
-
-        <!-- Removed original buttons div -->
 
         <!-- Removed original renderCanvas -->
     </div>

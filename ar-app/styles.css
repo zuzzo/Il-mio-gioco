@@ -393,19 +393,158 @@ button:disabled {
     background-color: #45a049;
 }
 
+/* --- Hamburger Menu Styles --- */
+#hamburger-icon {
+    position: fixed;
+    top: 15px;
+    right: 20px;
+    z-index: 1001; /* Above most elements */
+    cursor: pointer;
+    font-size: 24px;
+    color: white;
+    background-color: rgba(0, 0, 0, 0.5);
+    padding: 8px 12px;
+    border-radius: 5px;
+}
+
+#hamburger-icon:hover {
+    background-color: rgba(0, 0, 0, 0.8);
+}
+
+#side-menu {
+    position: fixed;
+    top: 0;
+    right: -280px; /* Start off-screen */
+    width: 250px;
+    height: 100vh;
+    background-color: #222; /* Dark background */
+    box-shadow: -2px 0 5px rgba(0,0,0,0.5);
+    z-index: 1000; /* Below hamburger icon when closed, but above content */
+    padding-top: 60px; /* Space for close button or title */
+    transition: right 0.3s ease-in-out;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+#side-menu.open {
+    right: 0; /* Slide in */
+}
+
+#side-menu a, #side-menu label {
+    padding: 12px 15px;
+    text-decoration: none;
+    font-size: 16px;
+    color: #ccc;
+    display: block;
+    transition: background-color 0.2s;
+    border-bottom: 1px solid #333;
+}
+
+#side-menu a i, #side-menu label i {
+    margin-right: 10px;
+    width: 20px; /* Align icons */
+    text-align: center;
+}
+
+
+#side-menu a:hover:not(#close-menu) {
+    background-color: #444;
+    color: white;
+}
+
+#side-menu a.disabled {
+    color: #666;
+    cursor: not-allowed;
+    background-color: transparent;
+}
+
+#side-menu a.disabled:hover {
+    background-color: transparent;
+}
+
+#side-menu a.danger-link {
+    color: #f44336;
+}
+#side-menu a.danger-link:hover {
+    background-color: rgba(244, 67, 54, 0.2);
+}
+
+#side-menu a.info-link {
+    color: #2196F3;
+}
+#side-menu a.info-link:hover {
+    background-color: rgba(33, 150, 243, 0.2);
+}
+
+
+#close-menu {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    font-size: 20px;
+    color: #aaa;
+    padding: 5px;
+    border-bottom: none;
+}
+#close-menu:hover {
+    color: white;
+}
+
+.menu-model-selection {
+    padding: 10px 15px;
+    border-bottom: 1px solid #333;
+}
+
+.menu-model-selection label {
+    padding: 0 0 5px 0;
+    font-size: 14px;
+    color: #aaa;
+    border-bottom: none;
+}
+
+.menu-model-selection select {
+    width: 100%;
+    padding: 8px;
+    border-radius: 3px;
+    background-color: #555;
+    color: white;
+    border: 1px solid #777;
+    margin-bottom: 10px;
+    font-size: 14px;
+}
+
+.menu-file-upload {
+    margin-top: 5px;
+}
+
+.menu-file-upload label {
+    font-size: 12px;
+    color: #aaa;
+    padding: 0 0 3px 0;
+}
+
+.menu-file-upload input {
+    width: 100%;
+    color: white;
+    font-size: 12px;
+    background-color: #555;
+    padding: 5px;
+    border-radius: 3px;
+}
+/* --- End Hamburger Menu Styles --- */
+
+
 /* Responsive adjustments for mobile */
 @media (max-width: 768px) {
-    #placementControls .buttons, #explorationModeUI .buttons {
-        flex-direction: column;
-        align-items: center;
-    }
-
-    #placementControls .buttons button, #explorationModeUI .buttons button {
-        width: 90%;
-        max-width: 300px;
-    }
-
+    /* Removed old button adjustments */
     #placementControls {
         max-height: 60%; /* Allow more space for controls on smaller screens */
     }
+
+    #side-menu {
+        width: 220px; /* Slightly narrower menu on mobile */
+        right: -250px; /* Adjust initial position if width changes */
+    }
+    /* Removed duplicated rules from here */
 }
