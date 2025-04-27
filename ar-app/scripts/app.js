@@ -47,6 +47,9 @@ class App {
                 this.showStatus("Sistema pronto. Clicca su 'Ottieni posizione' per iniziare.");
             }
             
+            // Carica i dati salvati se esistono
+            this.loadSavedData();
+            
             // Configura i listener dei pulsanti
             this.setupEventListeners();
             
@@ -58,6 +61,92 @@ class App {
             console.error("Errore nell'inizializzazione:", error);
             this.showStatus("Errore durante l'inizializzazione dell'app: " + error.message);
         }
+    }
+    
+    /**
+     * Carica i dati salvati dal localStorage
+     */
+    loadSavedData() {
+        try {
+            const savedPosition = localStorage.getItem('arAppSavedPosition');
+            const savedOrientation = localStorage.getItem('arAppSavedOrientation');
+            const savedModelPath = localStorage.getItem('arAppModelPath');
+            
+            if (savedPosition) {
+                const position = JSON.parse(savedPosition);
+                this.savedData.position = position;
+                
+                if (savedOrientation) {
+                    this.savedData.orientation = JSON.parse(savedOrientation);
+                }
+                
+                this.objectPlaced = true;
+                this.showStatus("Posizione salvata caricata: " + 
+                    position.latitude.toFixed(6) + ", " + 
+                    position.longitude.toFixed(6));
+                
+                // Abilita i pulsanti appropriati
+                setTimeout(() => {
+                    if (this.placeObjectBtn) this.placeObjectBtn.disabled = false;
+                    if (this.startARBtn) this.startARBtn.disabled = false;
+                }, 1000);
+                
+                // Ripristina il modello selezionato se disponibile
+                if (savedModelPath && this.modelSelect) {
+                    this.modelSelect.value = savedModelPath;
+                    this.selectedModelPath = savedModelPath;
+                    
+                    // Gestisce il caso del modello personalizzato
+                    if (savedModelPath === 'assets/models/custom.glb' && this.fileUploadDiv) {
+                        this.fileUploadDiv.classList.remove('hidden');
+                    }
+                }
+            }
+        } catch (error) {
+            console.error("Errore nel caricamento dei dati salvati:", error);
+            // Se c'è un errore nel parsing, cancella i dati corrotti
+            localStorage.removeItem('arAppSavedPosition');
+            localStorage.removeItem('arAppSavedOrientation');
+            localStorage.removeItem('arAppModelPath');
+        }
+    }
+    
+    /**
+     * Salva i dati correnti nel localStorage
+     */
+    saveDataToLocalStorage() {
+        if (this.savedData.position) {
+            localStorage.setItem('arAppSavedPosition', JSON.stringify(this.savedData.position));
+            
+            if (this.savedData.orientation) {
+                localStorage.setItem('arAppSavedOrientation', JSON.stringify(this.savedData.orientation));
+            }
+            
+            if (this.selectedModelPath) {
+                localStorage.setItem('arAppModelPath', this.selectedModelPath);
+            }
+            
+            console.log("Dati salvati nel localStorage");
+        }
+    }
+    
+    /**
+     * Cancella i dati salvati
+     */
+    clearSavedData() {
+        localStorage.removeItem('arAppSavedPosition');
+        localStorage.removeItem('arAppSavedOrientation');
+        localStorage.removeItem('arAppModelPath');
+        
+        this.savedData = {
+            position: null,
+            orientation: null
+        };
+        
+        this.objectPlaced = false;
+        this.startARBtn.disabled = true;
+        
+        this.showStatus("Dati salvati cancellati");
     }
     
     /**
@@ -102,6 +191,11 @@ class App {
                 } else {
                     this.fileUploadDiv.classList.add('hidden');
                 }
+                
+                // Salva l'aggiornamento del modello se c'è già una posizione salvata
+                if (this.objectPlaced) {
+                    this.saveDataToLocalStorage();
+                }
             });
         }
         
@@ -125,6 +219,9 @@ class App {
                 this.savedData = data;
                 this.objectPlaced = true;
                 this.startARBtn.disabled = false;
+                
+                // Salva i dati nel localStorage
+                this.saveDataToLocalStorage();
                 
                 // Mostra un messaggio informativo
                 if (data.orientation) {
@@ -193,6 +290,14 @@ class App {
                 this.showStatus("Errore: " + error.message);
             }
         });
+        
+        // Aggiungiamo un pulsante per cancellare i dati salvati (opzionale)
+        const clearBtn = document.getElementById('clearDataBtn');
+        if (clearBtn) {
+            clearBtn.addEventListener('click', () => {
+                this.clearSavedData();
+            });
+        }
     }
     
     /**
