@@ -202,9 +202,19 @@ class App {
 
             await this.requestAllPermissions(); // Richiedi permessi
 
-            // Inizializza ARManager (senza avviare AR subito)
-            // Passiamo entrambi i canvas, ARManager deciderà quale usare
-            const arSupported = await this.arManager.init(this.placementCanvas, this.explorationCanvas);
+            // Inizializza ARManager ora con il canvas giusto
+            // Per Placement mode usiamo placementCanvas
+            // Per Exploration mode usiamo explorationCanvas
+            const arSupported = await this.arManager.init(
+                this.placementCanvas, 
+                this.explorationCanvas
+            );
+            
+            // Assicurati che i canvas abbiano le giuste dimensioni
+            this.placementCanvas.width = window.innerWidth;
+            this.placementCanvas.height = window.innerHeight * 0.75;
+            this.explorationCanvas.width = window.innerWidth;
+            this.explorationCanvas.height = window.innerHeight;
             if (!arSupported) {
                 this.showStatus("Realtà aumentata WebXR non supportata.", this.currentMode);
                 // Disabilita modalità esplorazione se AR non supportata?
@@ -217,7 +227,15 @@ class App {
             this.startOrientationDisplay(); // Avvia display orientamento iniziale
 
             // Avvia la camera per la modalità piazzamento iniziale
-            await this.switchMode('placement'); // Attiva la modalità iniziale (placement)
+            // Assicurati che il canvas sia pronto prima di avviare
+            if (this.placementCanvas) {
+                this.placementCanvas.width = window.innerWidth;
+                this.placementCanvas.height = window.innerHeight * 0.75;
+                await this.switchMode('placement'); // Attiva la modalità iniziale (placement)
+            } else {
+                console.error("Placement canvas non trovato!");
+                this.showStatus("Errore: Canvas non disponibile", 'placement');
+            }
 
             this.initialized = true;
             this.showStatus("Sistema pronto. Ottieni la posizione per iniziare a piazzare oggetti.", 'placement');
@@ -415,7 +433,10 @@ class App {
             }
 
             this.showStatus("Avvio AR...", 'exploration');
-            this.explorationCanvas.classList.remove('hidden'); // Mostra canvas AR
+            // Assicurati che il canvas AR abbia le dimensioni corrette
+            this.explorationCanvas.width = window.innerWidth;
+            this.explorationCanvas.height = window.innerHeight;
+            this.explorationCanvas.classList.remove('hidden');
 
             try {
                 // Ferma camera feed piazzamento se ancora attiva
