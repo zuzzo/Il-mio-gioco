@@ -1,11 +1,14 @@
 /**
- * Gestisce la geolocalizzazione e il calcolo delle distanze
+ * Gestisce la geolocalizzazione, l'orientamento e il calcolo delle distanze
  */
 class GeoManager {
     constructor() {
         this.currentPosition = null;
         this.savedPosition = null;
+        this.currentOrientation = null;
+        this.savedOrientation = null;
         this.watchId = null;
+        this.isListeningOrientation = false;
     }
 
     /**
@@ -16,7 +19,67 @@ class GeoManager {
             this.updateStatus("Il tuo browser non supporta la geolocalizzazione.");
             return false;
         }
+        
+        // Verifica il supporto per l'orientamento del dispositivo
+        if (window.DeviceOrientationEvent) {
+            this.startOrientationTracking();
+        } else {
+            this.updateStatus("Attenzione: il tuo dispositivo non supporta la rilevazione dell'orientamento.");
+        }
+        
         return true;
+    }
+
+    /**
+     * Inizia a monitorare l'orientamento del dispositivo
+     */
+    startOrientationTracking() {
+        if (this.isListeningOrientation) return;
+
+        // Prima verifichiamo se è necessaria un'autorizzazione (iOS 13+)
+        if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+            this.updateStatus("Richiesta permesso per l'orientamento...");
+
+            DeviceOrientationEvent.requestPermission()
+                .then(permissionState => {
+                    if (permissionState === 'granted') {
+                        this.addOrientationListener();
+                    } else {
+                        this.updateStatus("Permesso per l'orientamento negato.");
+                    }
+                })
+                .catch(error => {
+                    console.error("Errore nella richiesta di permesso:", error);
+                    // Tentiamo comunque di aggiungere il listener, potrebbe funzionare su altri dispositivi
+                    this.addOrientationListener();
+                });
+        } else {
+            // Non è richiesta l'autorizzazione, aggiungiamo direttamente il listener
+            this.addOrientationListener();
+        }
+    }
+
+    /**
+     * Aggiunge l'event listener per l'orientamento
+     */
+    addOrientationListener() {
+        window.addEventListener('deviceorientation', this.handleOrientation.bind(this));
+        this.isListeningOrientation = true;
+    }
+
+    /**
+     * Gestisce i dati di orientamento del dispositivo
+     * @param {DeviceOrientationEvent} event - Evento di orientamento
+     */
+    handleOrientation(event) {
+        // Alpha: rotazione attorno all'asse z (0-360)
+        // Beta: rotazione attorno all'asse x (-180 to 180)
+        // Gamma: rotazione attorno all'asse y (-90 to 90)
+        this.currentOrientation = {
+            alpha: event.alpha, // Direzione bussola (0-360)
+            beta: event.beta,   // Inclinazione frontale/posteriore
+            gamma: event.gamma  // Inclinazione laterale
+        };
     }
 
     /**
@@ -90,6 +153,24 @@ class GeoManager {
                         this.savedPosition.longitude
                     );
                     this.updateDistance(distance);
+                    
+                    // Calcolare la direzione verso l'oggetto posizionato
+                    if (this.savedOrientation) {
+                        const bearing = this.calculateBearing(
+                            this.currentPosition.latitude,
+                            this.currentPosition.longitude,
+                            this.savedPosition.latitude,
+                            this.savedPosition.longitude
+                        );
+                        
+                        // Calcola la differenza tra la direzione della bussola e la direzione verso l'oggetto
+                        // Questo può essere usato per guidare l'utente verso l'oggetto
+                        const headingDifference = this.currentOrientation ? 
+                            (bearing - this.currentOrientation.alpha + 360) % 360 : 0;
+                            
+                        // Aggiorniamo l'UI con la direzione
+                        this.updateDirection(bearing, headingDifference);
+                    }
                 }
             },
             (error) => {
@@ -115,15 +196,29 @@ class GeoManager {
     }
 
     /**
-     * Salva la posizione corrente
+     * Salva la posizione e l'orientamento correnti
      */
-    saveCurrentPosition() {
+    saveCurrentPositionAndOrientation() {
         if (this.currentPosition) {
             this.savedPosition = {...this.currentPosition};
-            this.updateStatus("Oggetto posizionato alle coordinate: " +
-                this.savedPosition.latitude.toFixed(6) + ", " + 
-                this.savedPosition.longitude.toFixed(6));
-            return this.savedPosition;
+            
+            if (this.currentOrientation) {
+                this.savedOrientation = {...this.currentOrientation};
+                this.updateStatus(
+                    `Oggetto posizionato alle coordinate: ${this.savedPosition.latitude.toFixed(6)}, ${this.savedPosition.longitude.toFixed(6)} ` +
+                    `con direzione: ${this.savedOrientation.alpha.toFixed(1)}°`
+                );
+            } else {
+                this.updateStatus(
+                    `Oggetto posizionato alle coordinate: ${this.savedPosition.latitude.toFixed(6)}, ${this.savedPosition.longitude.toFixed(6)} ` +
+                    `(orientamento non disponibile)`
+                );
+            }
+            
+            return {
+                position: this.savedPosition,
+                orientation: this.savedOrientation
+            };
         }
         return null;
     }
@@ -144,6 +239,25 @@ class GeoManager {
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
         
         return R * c; // Distanza in metri
+    }
+    
+    /**
+     * Calcola la direzione in gradi da un punto a un altro (bearing)
+     * 0° = Nord, 90° = Est, 180° = Sud, 270° = Ovest
+     */
+    calculateBearing(lat1, lon1, lat2, lon2) {
+        const φ1 = lat1 * Math.PI / 180;
+        const φ2 = lat2 * Math.PI / 180;
+        const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+        const y = Math.sin(Δλ) * Math.cos(φ2);
+        const x = Math.cos(φ1) * Math.sin(φ2) -
+                Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+                
+        let bearing = Math.atan2(y, x) * 180 / Math.PI;
+        bearing = (bearing + 360) % 360; // Converti in 0-360
+        
+        return bearing;
     }
 
     /**
@@ -174,6 +288,24 @@ class GeoManager {
         if (distElement) {
             distElement.textContent = `Distanza dall'oggetto: ${distance.toFixed(2)} metri`;
             distElement.classList.remove('hidden');
+        }
+    }
+    
+    /**
+     * Aggiorna la direzione visualizzata
+     */
+    updateDirection(bearing, headingDifference) {
+        const dirElement = document.getElementById('direction');
+        if (dirElement) {
+            dirElement.textContent = `Direzione oggetto: ${bearing.toFixed(1)}°, Differenza: ${headingDifference.toFixed(1)}°`;
+            dirElement.classList.remove('hidden');
+            
+            // Possiamo usare anche una freccia per indicare la direzione
+            const arrowElement = document.getElementById('directionArrow');
+            if (arrowElement) {
+                arrowElement.style.transform = `rotate(${headingDifference}deg)`;
+                arrowElement.classList.remove('hidden');
+            }
         }
     }
 }

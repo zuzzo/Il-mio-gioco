@@ -23,6 +23,24 @@
             <div id="statusMessage">Caricamento...</div>
             <div id="coordinates"></div>
             <div id="distance" class="hidden"></div>
+            <div id="direction" class="hidden"></div>
+            <div id="directionArrow" class="hidden">↑</div>
+            <div id="orientationInfo" class="hidden"></div>
+        </div>
+        
+        <div class="model-selection">
+            <label for="model-select">Seleziona oggetto 3D:</label>
+            <select id="model-select">
+                <option value="assets/models/treasure.glb">Forziere</option>
+                <option value="assets/models/key.glb">Chiave</option>
+                <option value="assets/models/door.glb">Porta</option>
+                <option value="assets/models/custom.glb">Oggetto personalizzato</option>
+            </select>
+            
+            <div class="file-upload hidden">
+                <label for="custom-model">Carica modello 3D (.glb):</label>
+                <input type="file" id="custom-model" accept=".glb,.gltf">
+            </div>
         </div>
         
         <div class="buttons">

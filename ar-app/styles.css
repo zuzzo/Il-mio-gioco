@@ -40,6 +40,13 @@ body, html {
     margin-bottom: 5px;
 }
 
+#directionArrow {
+    font-size: 30px;
+    margin: 10px 0;
+    text-align: center;
+    transition: transform 0.3s ease;
+}
+
 .buttons {
     position: absolute;
     bottom: 20px;
@@ -68,4 +75,47 @@ button:disabled {
 
 .hidden {
     display: none;
+}
+
+.model-selection {
+    position: absolute;
+    top: 120px;
+    left: 10px;
+    background-color: rgba(0, 0, 0, 0.6);
+    color: white;
+    padding: 10px;
+    border-radius: 5px;
+    z-index: 2;
+    max-width: 80%;
+}
+
+.model-selection label {
+    display: block;
+    margin-bottom: 5px;
+}
+
+.model-selection select {
+    width: 100%;
+    padding: 8px;
+    border-radius: 3px;
+    margin-bottom: 10px;
+    background-color: #333;
+    color: white;
+    border: 1px solid #555;
+}
+
+.file-upload {
+    margin-top: 10px;
+}
+
+.file-upload input {
+    width: 100%;
+    margin-top: 5px;
+    color: white;
+}
+
+#orientationInfo {
+    margin-top: 5px;
+    font-size: 12px;
+    color: #ccc;
 }
