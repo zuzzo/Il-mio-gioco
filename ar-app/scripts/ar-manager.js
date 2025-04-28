@@ -8,6 +8,7 @@ class ARManager {
         this.scene = null;
         this.camera = null;
         this.isARSupported = false;
+<<<<<<< HEAD
         this.isARMode = false;
         this.arObject = null;
         this.directionIndicator = null;
@@ -22,6 +23,15 @@ class ARManager {
         this.anchorTimeout = null;
         this.anchorDistance = 5; // Distanza in metri entro cui tentare l'ancoraggio
         this.maxAnchorDistance = 15; // Distanza oltre la quale rimuovere l'ancoraggio
+=======
+        this.isARMode = false; // Flag per modalità AR immersiva attiva
+        this.xrExperienceHelper = null; // Riferimento all'helper XR
+        this.arObjects = new Map(); // Mappa per tenere traccia degli oggetti AR per ID { id: meshNode }
+        this.previewObject = null; // Riferimento all'oggetto mostrato in anteprima nel placement mode
+
+        this.cameraFeedVideo = null; // Elemento video per il feed camera
+        this.cameraFeedStream = null; // Stream della camera
+>>>>>>> 9202b8e125413375069e04180c2952e8341550ee
     }
 
     /**
@@ -180,12 +190,130 @@ class ARManager {
         if (!this.arActive) {
             return null;
         }
+<<<<<<< HEAD
         
         // Reset dello stato di ancoraggio quando si posiziona un nuovo oggetto
         this.isAnchored = false;
         this.anchorPosition = null;
         
         if (!this.arObject) {
+=======
+    }
+
+    /**
+     * Rimuove tutti gli oggetti AR dalla scena e dalla mappa interna.
+     */
+    clearARObjects() {
+        this.arObjects.forEach(mesh => {
+            if (mesh) {
+                mesh.dispose();
+            }
+        });
+        this.arObjects.clear();
+        console.log("Cleared all AR objects from the scene.");
+    }
+
+    /**
+     * Pulisce l'oggetto di anteprima (se presente) dalla scena.
+     */
+    clearPreviewObject() {
+        if (this.previewObject) {
+            this.previewObject.dispose();
+            this.previewObject = null;
+            console.log("Cleared preview object.");
+        }
+    }
+
+    /**
+     * Mostra un singolo oggetto in anteprima nella vista camera (modalità piazzamento).
+     * @param {string} modelPath - Percorso o URL del modello (.glb).
+     * @param {number} orientationAlpha - Orientamento bussola (gradi) da applicare.
+     */
+    async placeSingleObjectForPreview(modelPath, orientationAlpha) {
+        if (this.isARMode) {
+            console.warn("Cannot place preview object while in AR mode.");
+            return;
+        }
+        if (!this.scene) {
+            console.error("Scene not available for preview.");
+            return;
+        }
+
+        this.clearPreviewObject(); // Rimuovi anteprima precedente
+
+        try {
+            console.log(`Loading preview model: ${modelPath}`);
+            const result = await BABYLON.SceneLoader.ImportMeshAsync("", "", modelPath, this.scene, undefined, ".glb");
+
+            if (!result.meshes || result.meshes.length === 0) {
+                throw new Error(`Preview model ${modelPath} loaded empty.`);
+            }
+
+            this.previewObject = result.meshes[0];
+            this.previewObject.name = "previewObject";
+
+            // Scala come gli oggetti AR
+            const boundingInfo = this.calculateBoundingInfo(result.meshes);
+            const maxDimension = Math.max(
+                boundingInfo.maximum.x - boundingInfo.minimum.x,
+                boundingInfo.maximum.y - boundingInfo.minimum.y,
+                boundingInfo.maximum.z - boundingInfo.minimum.z
+            );
+            const desiredHeight = 0.4; // Leggermente più piccolo per l'anteprima?
+            const scaleFactor = maxDimension > 0 ? desiredHeight / maxDimension : 1;
+            this.previewObject.scaling.scaleInPlace(scaleFactor);
+
+            // Posiziona davanti alla camera di default (assumendo sia attiva)
+            // Potremmo legarlo alla camera attiva se cambia
+            const camera = this.scene.activeCamera || this.scene.getCameraByName("defaultCam");
+            if (camera) {
+                 // Posiziona a 1.5 unità davanti alla camera, leggermente in basso
+                 const forward = camera.getDirection(BABYLON.Axis.Z);
+                 const position = camera.position.add(forward.scale(1.5));
+                 position.y -= 0.2; // Abbassa leggermente
+                 this.previewObject.position = position;
+            } else {
+                 this.previewObject.position = new BABYLON.Vector3(0, -0.2, 1.5); // Fallback position
+            }
+
+
+            // Applica rotazione
+            const orientationRad = (orientationAlpha * Math.PI) / 180;
+            this.previewObject.rotation.y = -orientationRad;
+
+            console.log("Preview object placed.");
+
+        } catch (error) {
+            console.error("Error placing preview object:", error);
+            this.showStatus(`Errore anteprima: ${error.message}`, 'placement'); // Usa showStatus da App? No, logga qui.
+            this.clearPreviewObject();
+        }
+    }
+
+
+    /**
+     * Carica e posiziona multipli oggetti virtuali nella scena AR.
+     * @param {Array} objectsData - Array di oggetti { id, model, position, orientation }
+     */
+    async placeMultipleVirtualObjects(objectsData) {
+        if (!this.isARMode || !this.xrExperienceHelper) {
+            console.error("AR non attiva. Impossibile piazzare oggetti.");
+            return;
+        }
+
+        this.clearARObjects(); // Rimuovi eventuali oggetti precedenti
+
+        console.log(`Placing ${objectsData.length} objects in AR scene...`);
+
+        const loadPromises = objectsData.map(async (objData) => {
+            // --- AGGIUNTA: Salta i placeholder dei modelli custom ---
+            if (objData.model === 'assets/models/custom_placeholder.glb') {
+                console.log(`Skipping placeholder object ${objData.id}`);
+                return; // Non caricare questo oggetto
+            }
+            // --- FINE AGGIUNTA ---
+
+>>>>>>> 9202b8e125413375069e04180c2952e8341550ee
             try {
                 // Salva l'orientamento dell'oggetto
                 this.savedObjectOrientation = deviceOrientation;
