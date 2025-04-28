@@ -60,6 +60,9 @@ class ARManager {
                 this.engine.resize();
             });
             
+            // Inizializza il sistema di debug della fotocamera
+            this.initCameraDebug();
+            
             // Avvia il flusso video dalla fotocamera
             const cameraStarted = await this.startVideoStream();
             
@@ -80,72 +83,247 @@ class ARManager {
     }
     
     /**
-     * Avvia il flusso video dalla fotocamera
+     * Avvia il flusso video dalla fotocamera con debug esteso
      */
     async startVideoStream() {
         try {
+            // DEBUG: Verifica se l'elemento video esiste
+            const videoExists = !!this.videoElement;
+            console.log("[DEBUG Camera] Elemento video esiste:", videoExists);
+            if (this.videoElement) {
+                console.log("[DEBUG Camera] Video ID:", this.videoElement.id);
+                console.log("[DEBUG Camera] Video dimensioni:", this.videoElement.width, "x", this.videoElement.height);
+                console.log("[DEBUG Camera] Video è in DOM:", document.body.contains(this.videoElement));
+                
+                // Controlla i CSS applicati
+                const computedStyle = window.getComputedStyle(this.videoElement);
+                console.log("[DEBUG Camera] Video display:", computedStyle.display);
+                console.log("[DEBUG Camera] Video visibility:", computedStyle.visibility);
+                console.log("[DEBUG Camera] Video z-index:", computedStyle.zIndex);
+                console.log("[DEBUG Camera] Video position:", computedStyle.position);
+            }
+            
             if (!this.videoElement) {
-                console.error("Elemento video non trovato");
+                console.error("[DEBUG Camera] Elemento video non trovato");
                 this.updateStatus("Errore: elemento video non trovato nel DOM");
-                return false;
+                
+                // Crea l'elemento video se manca
+                const newVideo = document.createElement('video');
+                newVideo.id = 'camera-feed';
+                newVideo.setAttribute('autoplay', '');
+                newVideo.setAttribute('playsinline', '');
+                newVideo.setAttribute('muted', '');
+                newVideo.style.position = 'absolute';
+                newVideo.style.width = '100%';
+                newVideo.style.height = '100%';
+                newVideo.style.objectFit = 'cover';
+                newVideo.style.zIndex = '1';
+                
+                const arView = document.querySelector('.ar-view');
+                if (arView) {
+                    console.log("[DEBUG Camera] Creazione nuovo elemento video in .ar-view");
+                    arView.prepend(newVideo);
+                    this.videoElement = newVideo;
+                } else {
+                    console.error("[DEBUG Camera] Impossibile trovare il contenitore .ar-view");
+                    return false;
+                }
+            }
+            
+            // DEBUG: Verifica supporto MediaDevices API
+            const hasMediaDevices = !!navigator.mediaDevices;
+            console.log("[DEBUG Camera] MediaDevices supportati:", hasMediaDevices);
+            if (hasMediaDevices) {
+                console.log("[DEBUG Camera] getUserMedia supportato:", !!navigator.mediaDevices.getUserMedia);
+                
+                // Lista i dispositivi disponibili
+                try {
+                    const devices = await navigator.mediaDevices.enumerateDevices();
+                    const videoDevices = devices.filter(device => device.kind === 'videoinput');
+                    console.log("[DEBUG Camera] Dispositivi video disponibili:", videoDevices.length);
+                    videoDevices.forEach((device, index) => {
+                        console.log(`[DEBUG Camera] Camera ${index}:`, device.label || `Camera ${index}`);
+                    });
+                } catch (err) {
+                    console.error("[DEBUG Camera] Errore nell'enumerazione dispositivi:", err);
+                }
+            }
+            
+            // Supporta vecchi browser
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                console.log("[DEBUG Camera] MediaDevices non supportato, provo fallback");
+                navigator.mediaDevices = {};
+                navigator.mediaDevices.getUserMedia = function(constraints) {
+                    const getUserMedia = navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
+                    if (!getUserMedia) {
+                        console.error("[DEBUG Camera] getUserMedia non è supportato in questo browser");
+                        return Promise.reject(new Error('getUserMedia non supportato'));
+                    }
+                    return new Promise(function(resolve, reject) {
+                        getUserMedia.call(navigator, constraints, resolve, reject);
+                    });
+                };
             }
             
             const constraints = {
                 video: {
-                    facingMode: 'environment',
+                    facingMode: 'environment', // Usa la fotocamera posteriore
                     width: { ideal: 1280 },
                     height: { ideal: 720 }
                 }
             };
             
+            // Prove diverse modalità se quella principale fallisce
+            const fallbackConstraints = [
+                { video: { facingMode: 'environment' } },                        // Solo fotocamera posteriore senza specifiche
+                { video: { deviceId: { exact: 'environment' } } },              // Prova exact deviceId
+                { video: true },                                                // Qualsiasi fotocamera
+                { video: { facingMode: { exact: 'environment' } } }             // Forza esattamente la fotocamera posteriore
+            ];
+            
             // Aggiungi un messaggio di stato
             this.updateStatus("Richiesta accesso alla fotocamera...");
             
-            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            // Prova prima con i constraint principali
+            let stream;
+            try {
+                console.log("[DEBUG Camera] Tentativo principale con constraint:", JSON.stringify(constraints));
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+                console.log("[DEBUG Camera] Stream ottenuto con successo dal constraint principale");
+            } catch (primaryError) {
+                console.error("[DEBUG Camera] Errore constraint principale:", primaryError.name, primaryError.message);
+                
+                // Prova con i fallback
+                for (let i = 0; i < fallbackConstraints.length; i++) {
+                    try {
+                        console.log(`[DEBUG Camera] Tentativo fallback ${i+1} con:`, JSON.stringify(fallbackConstraints[i]));
+                        stream = await navigator.mediaDevices.getUserMedia(fallbackConstraints[i]);
+                        console.log(`[DEBUG Camera] Stream ottenuto con fallback ${i+1}`);
+                        break;
+                    } catch (fallbackError) {
+                        console.error(`[DEBUG Camera] Errore fallback ${i+1}:`, fallbackError.name, fallbackError.message);
+                    }
+                }
+            }
+            
+            if (!stream) {
+                console.error("[DEBUG Camera] Tutti i tentativi di accesso alla fotocamera falliti");
+                this.updateStatus("Impossibile accedere alla fotocamera dopo multipli tentativi");
+                return false;
+            }
+            
+            // DEBUG: Controlla le tracce video ottenute
+            console.log("[DEBUG Camera] Stream ottenuto, tracce video:", stream.getVideoTracks().length);
+            stream.getVideoTracks().forEach((track, index) => {
+                console.log(`[DEBUG Camera] Traccia ${index} attiva:`, track.enabled);
+                console.log(`[DEBUG Camera] Traccia ${index} settings:`, JSON.stringify(track.getSettings()));
+                console.log(`[DEBUG Camera] Traccia ${index} constraints:`, JSON.stringify(track.getConstraints()));
+            });
+            
+            // Assegna lo stream al video
             this.videoElement.srcObject = stream;
+            
+            // DEBUG: Verifica le proprietà di srcObject
+            console.log("[DEBUG Camera] srcObject impostato:", !!this.videoElement.srcObject);
+            console.log("[DEBUG Camera] Video paused:", this.videoElement.paused);
+            console.log("[DEBUG Camera] Video muted:", this.videoElement.muted);
+            
+            // Forza alcuni attributi per compatibilità mobile
+            this.videoElement.setAttribute('playsinline', 'playsinline');
+            this.videoElement.setAttribute('webkit-playsinline', 'webkit-playsinline');
+            this.videoElement.muted = true;
             
             // Aggiungi gestori degli eventi
             this.videoElement.onerror = (e) => {
-                console.error("Errore elemento video:", e);
+                console.error("[DEBUG Camera] Errore elemento video:", e);
                 this.updateStatus("Errore nell'inizializzazione del video");
             };
             
-            // Debug info
-            console.log("Stream ottenuto, impostato su elemento video:", this.videoElement.id);
-            console.log("Video tracks:", stream.getVideoTracks().length);
-            stream.getVideoTracks().forEach(track => {
-                console.log("Video track settings:", track.getSettings());
+            // DEBUG: Aggiungi handlers per tutti gli eventi video
+            const videoEvents = ['loadedmetadata', 'playing', 'play', 'pause', 'error', 'stalled', 'suspend', 'waiting'];
+            videoEvents.forEach(eventName => {
+                this.videoElement.addEventListener(eventName, () => {
+                    console.log(`[DEBUG Camera] Evento video: ${eventName}`);
+                    if (eventName === 'error') {
+                        console.error("[DEBUG Camera] Errore video:", this.videoElement.error);
+                    }
+                });
             });
             
             // Attendi che il video sia pronto
             return new Promise((resolve) => {
+                // Se il video è già caricato
+                if (this.videoElement.readyState >= 2) {
+                    console.log("[DEBUG Camera] Video già caricato (readyState:", this.videoElement.readyState + ")");
+                    this.playVideo().then(success => resolve(success));
+                    return;
+                }
+                
+                // Altrimenti attendi loadedmetadata
                 this.videoElement.onloadedmetadata = () => {
-                    console.log("Video metadata caricati, avvio riproduzione...");
-                    this.updateStatus("Fotocamera pronta");
-                    this.videoElement.play()
-                        .then(() => {
-                            console.log("Video avviato con successo");
-                            resolve(true);
-                        })
-                        .catch(err => {
-                            console.error("Errore nell'avvio del video:", err);
-                            this.updateStatus("Impossibile avviare lo stream video");
-                            resolve(false);
-                        });
+                    console.log("[DEBUG Camera] Video metadata caricati, dimensioni:", 
+                        this.videoElement.videoWidth, "x", this.videoElement.videoHeight);
+                    this.updateStatus("Fotocamera pronta, avvio riproduzione...");
+                    this.playVideo().then(success => resolve(success));
                 };
                 
                 // Timeout per evitare blocchi
                 setTimeout(() => {
                     if (this.videoElement.paused) {
-                        console.warn("Timeout nell'attesa del caricamento del video");
-                        this.updateStatus("Timeout fotocamera - riprova");
-                        resolve(false);
+                        console.warn("[DEBUG Camera] Timeout nell'attesa del caricamento del video");
+                        this.updateStatus("Timeout fotocamera - tentativo di riproduzione forzata");
+                        this.playVideo().then(success => resolve(success));
                     }
-                }, 5000);
+                }, 3000);
             });
         } catch (error) {
-            console.error("Errore nell'accesso alla fotocamera:", error);
+            console.error("[DEBUG Camera] Errore generale nell'accesso alla fotocamera:", error.name, error.message);
             this.updateStatus("Errore fotocamera: " + error.message);
+            return false;
+        }
+    }
+    
+    /**
+     * Metodo separato per tentare la riproduzione del video
+     */
+    async playVideo() {
+        try {
+            console.log("[DEBUG Camera] Tentativo di riproduzione video");
+            await this.videoElement.play();
+            console.log("[DEBUG Camera] Video avviato con successo");
+            
+            // Dopo la riproduzione, verifica di nuovo lo stato
+            console.log("[DEBUG Camera] Stato post-play - paused:", this.videoElement.paused);
+            console.log("[DEBUG Camera] Stato post-play - currentTime:", this.videoElement.currentTime);
+            console.log("[DEBUG Camera] Stato post-play - videoWidth:", this.videoElement.videoWidth);
+            
+            // Forza la visibilità
+            this.videoElement.style.display = 'block';
+            
+            // Forza un reflow del browser
+            void this.videoElement.offsetHeight;
+            
+            this.updateStatus("Fotocamera attiva");
+            return true;
+        } catch (playError) {
+            console.error("[DEBUG Camera] Errore riproduzione video:", playError.name, playError.message);
+            
+            // Se l'autoplay fallisce, mostro un messaggio che richiede interazione utente
+            this.updateStatus("Autorizza l'accesso alla fotocamera e tocca lo schermo");
+            
+            // Aggiungi un listener per il tocco dell'utente 
+            document.body.addEventListener('click', async () => {
+                try {
+                    console.log("[DEBUG Camera] Tentativo riproduzione dopo interazione utente");
+                    await this.videoElement.play();
+                    console.log("[DEBUG Camera] Video avviato dopo interazione utente");
+                    this.updateStatus("Fotocamera attiva");
+                } catch (e) {
+                    console.error("[DEBUG Camera] Errore anche dopo interazione:", e);
+                    this.updateStatus("Impossibile avviare la fotocamera");
+                }
+            }, {once: true});
+            
             return false;
         }
     }
@@ -563,6 +741,178 @@ class ARManager {
         
         console.log("Esperienza AR fermata");
         this.updateStatus("AR fermata");
+    }
+    
+    /**
+     * Inizializza il sistema di debug della fotocamera
+     */
+    initCameraDebug() {
+        // Elementi UI
+        const debugPanel = document.getElementById('cameraDebugPanel');
+        const toggleBtn = document.getElementById('toggleCameraDebugBtn');
+        const cameraStatusEl = document.getElementById('cameraStatus');
+        const videoElementStatusEl = document.getElementById('videoElementStatus');
+        const streamInfoEl = document.getElementById('streamInfo');
+        const cameraErrorsEl = document.getElementById('cameraErrors');
+        const videoDimensionsEl = document.getElementById('videoDimensions');
+        const videoPlayStateEl = document.getElementById('videoPlayState');
+        
+        // Pulsanti azioni
+        const forceCameraBtn = document.getElementById('forceCameraBtn');
+        const refreshVideoBtn = document.getElementById('refreshVideoBtn');
+        const showHiddenDataBtn = document.getElementById('showHiddenDataBtn');
+        
+        // Se gli elementi non esistono, esci
+        if (!debugPanel || !toggleBtn) return;
+        
+        // Mostra/nascondi pannello di debug
+        toggleBtn.addEventListener('click', () => {
+            debugPanel.classList.toggle('hidden');
+            this.updateCameraDebugInfo();
+        });
+        
+        // Aggiorna informazioni ad intervalli regolari
+        setInterval(() => {
+            if (!debugPanel.classList.contains('hidden')) {
+                this.updateCameraDebugInfo();
+            }
+        }, 1000);
+        
+        // Funzioni per i pulsanti di debug
+        if (forceCameraBtn) {
+            forceCameraBtn.addEventListener('click', async () => {
+                cameraStatusEl.textContent = "Tentativo forzato di accesso alla fotocamera...";
+                try {
+                    const constraints = { 
+                        video: { 
+                            facingMode: 'environment',
+                            width: { ideal: 640 },
+                            height: { ideal: 480 }
+                        } 
+                    };
+                    
+                    const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                    
+                    if (this.videoElement) {
+                        this.videoElement.srcObject = stream;
+                        this.videoElement.play()
+                            .then(() => {
+                                cameraStatusEl.textContent = "Camera avviata manualmente con successo";
+                                // Forza la visibilità
+                                this.videoElement.style.display = 'block';
+                                this.videoElement.style.opacity = '1';
+                                this.videoElement.classList.add('video-debug');
+                            })
+                            .catch(err => {
+                                cameraStatusEl.textContent = "Errore avvio video: " + err.message;
+                            });
+                    } else {
+                        cameraStatusEl.textContent = "Elemento video non trovato!";
+                    }
+                } catch (err) {
+                    cameraStatusEl.textContent = "Errore accesso camera: " + err.message;
+                }
+            });
+        }
+        
+        if (refreshVideoBtn) {
+            refreshVideoBtn.addEventListener('click', () => {
+                if (this.videoElement && this.videoElement.srcObject) {
+                    cameraStatusEl.textContent = "Video refreshed";
+                    
+                    // Forza la visibilità
+                    this.videoElement.style.display = 'block';
+                    this.videoElement.style.opacity = '1';
+                    this.videoElement.style.visibility = 'visible';
+                    this.videoElement.style.zIndex = '10';
+                    
+                    // Rimuovi e riattacca l'elemento per forzare un refresh
+                    const parent = this.videoElement.parentNode;
+                    const next = this.videoElement.nextSibling;
+                    parent.removeChild(this.videoElement);
+                    parent.insertBefore(this.videoElement, next);
+                    
+                    // Highlight per debug
+                    this.videoElement.classList.toggle('video-debug');
+                } else {
+                    cameraStatusEl.textContent = "Nessun video da refreshare";
+                }
+            });
+        }
+        
+        if (showHiddenDataBtn) {
+            showHiddenDataBtn.addEventListener('click', () => {
+                document.body.classList.toggle('show-borders');
+                
+                // Trova tutti gli elementi video nascosti
+                const videoElements = document.querySelectorAll('video');
+                let hiddenVideos = 0;
+                
+                videoElements.forEach(video => {
+                    const style = window.getComputedStyle(video);
+                    if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
+                        video.style.display = 'block';
+                        video.style.visibility = 'visible';
+                        video.style.opacity = '1';
+                        video.style.border = '3px solid red';
+                        hiddenVideos++;
+                    }
+                });
+                
+                cameraStatusEl.textContent = `Trovati ${videoElements.length} elementi video, ${hiddenVideos} erano nascosti`;
+            });
+        }
+    }
+    
+    /**
+     * Metodo per aggiornare le informazioni di debug della fotocamera
+     */
+    updateCameraDebugInfo() {
+        const videoElementStatusEl = document.getElementById('videoElementStatus');
+        const streamInfoEl = document.getElementById('streamInfo');
+        const cameraErrorsEl = document.getElementById('cameraErrors');
+        const videoDimensionsEl = document.getElementById('videoDimensions');
+        const videoPlayStateEl = document.getElementById('videoPlayState');
+        
+        if (!videoElementStatusEl) return;
+        
+        // Informazioni sull'elemento video
+        if (this.videoElement) {
+            const computedStyle = window.getComputedStyle(this.videoElement);
+            videoElementStatusEl.textContent = `Trovato (${this.videoElement.id})`;
+            videoDimensionsEl.textContent = `${this.videoElement.videoWidth || 0}x${this.videoElement.videoHeight || 0} - CSS: ${computedStyle.width}x${computedStyle.height}`;
+            videoPlayStateEl.textContent = `Paused: ${this.videoElement.paused}, Muted: ${this.videoElement.muted}, ReadyState: ${this.videoElement.readyState}, Display: ${computedStyle.display}`;
+            
+            // Informazioni sullo stream
+            if (this.videoElement.srcObject) {
+                const videoTracks = this.videoElement.srcObject.getVideoTracks();
+                streamInfoEl.textContent = `${videoTracks.length} tracce. Attiva: ${videoTracks.length > 0 ? videoTracks[0].enabled : 'No'}`;
+                
+                if (videoTracks.length > 0) {
+                    try {
+                        const settings = videoTracks[0].getSettings();
+                        streamInfoEl.textContent += ` - ${settings.width}x${settings.height} ${settings.facingMode || ''}`;
+                    } catch (e) {
+                        streamInfoEl.textContent += ` (errore settings: ${e.message})`;
+                    }
+                }
+            } else {
+                streamInfoEl.textContent = "Nessuno stream attivo";
+            }
+            
+            // Errori
+            if (this.videoElement.error) {
+                cameraErrorsEl.textContent = `ERROR: ${this.videoElement.error.code} - ${this.videoElement.error.message}`;
+            } else {
+                cameraErrorsEl.textContent = "Nessun errore";
+            }
+        } else {
+            videoElementStatusEl.textContent = "Non trovato";
+            streamInfoEl.textContent = "N/A";
+            cameraErrorsEl.textContent = "N/A";
+            videoDimensionsEl.textContent = "N/A";
+            videoPlayStateEl.textContent = "N/A";
+        }
     }
     
     /**

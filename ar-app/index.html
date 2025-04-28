@@ -38,7 +38,6 @@
                 </div>
                 
                 <div class="ar-info-panel">
-                    <div id="coordinates"></div>
                     <div id="distance" class="hidden"></div>
                     <div id="direction" class="hidden"></div>
                     <div id="orientationInfo" class="hidden"></div>
@@ -71,6 +70,7 @@
         
         <footer class="app-footer">
             <button id="debugBtn" class="info-btn">Debug</button>
+            <button id="toggleCameraDebugBtn" class="info-btn">Debug Camera</button>
         </footer>
     </div>
     
@@ -78,6 +78,24 @@
     <div id="browserNotification" class="notification hidden">
         <p>Per una migliore esperienza, è consigliato utilizzare Microsoft Edge o Google Chrome su dispositivi Android.</p>
         <button class="close-notification">Chiudi</button>
+    </div>
+    
+    <!-- Pannello di debug della fotocamera -->
+    <div id="cameraDebugPanel" class="debug-panel hidden">
+        <h3>Debug Fotocamera</h3>
+        <div id="cameraStatus">In attesa...</div>
+        <div class="debug-info">
+            <div><strong>Video Element:</strong> <span id="videoElementStatus">-</span></div>
+            <div><strong>Stream Info:</strong> <span id="streamInfo">-</span></div>
+            <div><strong>Errori:</strong> <span id="cameraErrors">-</span></div>
+            <div><strong>Dimensioni:</strong> <span id="videoDimensions">-</span></div>
+            <div><strong>Play State:</strong> <span id="videoPlayState">-</span></div>
+        </div>
+        <div class="debug-actions">
+            <button id="forceCameraBtn">Forza Camera</button>
+            <button id="refreshVideoBtn">Aggiorna Video</button>
+            <button id="showHiddenDataBtn">Mostra Dati</button>
+        </div>
     </div>
 </body>
 </html>
