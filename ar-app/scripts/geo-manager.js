@@ -1,43 +1,38 @@
 /**
- * Gestisce la geolocalizzazione, l'orientamento e il calcolo delle distanze.
- * Utilizza callbacks per comunicare con l'applicazione principale.
+ * Gestisce la geolocalizzazione, l'orientamento e il calcolo delle distanze
  */
 class GeoManager {
     constructor() {
-        this.currentPosition = null; // { latitude, longitude, accuracy }
-        this.currentOrientation = null; // { alpha, beta, gamma }
+        this.currentPosition = null;
+        this.savedPosition = null;
+        this.currentOrientation = null;
+        this.savedOrientation = null;
         this.watchId = null;
         this.isListeningOrientation = false;
-
-        // Callbacks per aggiornare l'UI (verranno impostate da App.js)
-        this.onStatusUpdate = (message) => console.log("GeoStatus:", message); // Default logger
-        this.onPositionUpdate = (position) => {};
-        this.onOrientationUpdate = (orientation) => {};
+        
+        // Variabili per migliorare la stabilità
+        this.positionHistory = [];
+        this.orientationHistory = [];
+        this.maxHistoryLength = 5; // Numero di letture da memorizzare per smussare
+        this.historyWeight = 0.7; // Peso per le letture recenti vs quelle vecchie
     }
 
     /**
-     * Inizializza il gestore di geolocalizzazione e orientamento.
-     * @param {function(string)} statusCallback - Funzione per aggiornare lo stato.
-     * @param {function(object)} positionCallback - Funzione per aggiornare le coordinate.
-     * @param {function(object)} orientationCallback - Funzione per aggiornare l'orientamento.
+     * Inizializza il gestore di geolocalizzazione
      */
-    init(statusCallback, positionCallback, orientationCallback) {
-        if (statusCallback) this.onStatusUpdate = statusCallback;
-        if (positionCallback) this.onPositionUpdate = positionCallback;
-        if (orientationCallback) this.onOrientationUpdate = orientationCallback;
-
+    init() {
         if (!navigator.geolocation) {
-            this.onStatusUpdate("Il tuo browser non supporta la geolocalizzazione.");
+            this.updateStatus("Il tuo browser non supporta la geolocalizzazione.");
             return false;
         }
-
-        // Verifica e avvia il monitoraggio dell'orientamento
+        
+        // Verifica il supporto per l'orientamento del dispositivo
         if (window.DeviceOrientationEvent) {
             this.startOrientationTracking();
         } else {
-            this.onStatusUpdate("Attenzione: il tuo dispositivo non supporta la rilevazione dell'orientamento.");
+            this.updateStatus("Attenzione: il tuo dispositivo non supporta la rilevazione dell'orientamento.");
         }
-
+        
         return true;
     }
 
@@ -47,39 +42,23 @@ class GeoManager {
     startOrientationTracking() {
         if (this.isListeningOrientation) return;
 
-        const handlePermission = (permissionState) => {
-            if (permissionState === 'granted') {
-                this.addOrientationListener();
-                this.onStatusUpdate("Permesso orientamento concesso.");
-            } else {
-                this.onStatusUpdate("Permesso per l'orientamento negato.");
-            }
-        };
-
-        // Verifica se è necessaria un'autorizzazione (iOS 13+)
+        // Prima verifichiamo se è necessaria un'autorizzazione (iOS 13+)
         if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-            // Controlla lo stato attuale del permesso prima di richiederlo
-            // Nota: Questa API è sperimentale e potrebbe non essere standard
-            if (navigator.permissions && navigator.permissions.query) {
-                 navigator.permissions.query({ name: 'accelerometer' }) // Usa un sensore correlato
-                    .then(result => {
-                        if (result.state === 'granted') {
-                             this.addOrientationListener();
-                        } else if (result.state === 'prompt') {
-                             DeviceOrientationEvent.requestPermission().then(handlePermission).catch(err => console.error(err));
-                        } else { // denied
-                             this.onStatusUpdate("Permesso per l'orientamento negato.");
-                        }
-                    }).catch(e => {
-                         // Fallback se query non supportata per accelerometer
-                         console.warn("Query permesso sensore non supportata, richiedo direttamente orientamento.");
-                         DeviceOrientationEvent.requestPermission().then(handlePermission).catch(err => console.error(err));
-                    });
-            } else {
-                 // Fallback se Permissions API non supportata per sensori
-                 DeviceOrientationEvent.requestPermission().then(handlePermission).catch(err => console.error(err));
-            }
+            this.updateStatus("Richiesta permesso per l'orientamento...");
 
+            DeviceOrientationEvent.requestPermission()
+                .then(permissionState => {
+                    if (permissionState === 'granted') {
+                        this.addOrientationListener();
+                    } else {
+                        this.updateStatus("Permesso per l'orientamento negato.");
+                    }
+                })
+                .catch(error => {
+                    console.error("Errore nella richiesta di permesso:", error);
+                    // Tentiamo comunque di aggiungere il listener, potrebbe funzionare su altri dispositivi
+                    this.addOrientationListener();
+                });
         } else {
             // Non è richiesta l'autorizzazione, aggiungiamo direttamente il listener
             this.addOrientationListener();
@@ -90,10 +69,8 @@ class GeoManager {
      * Aggiunge l'event listener per l'orientamento
      */
     addOrientationListener() {
-        if (this.isListeningOrientation) return;
         window.addEventListener('deviceorientation', this.handleOrientation.bind(this));
         this.isListeningOrientation = true;
-        console.log("Orientation listener added.");
     }
 
     /**
@@ -101,90 +78,251 @@ class GeoManager {
      * @param {DeviceOrientationEvent} event - Evento di orientamento
      */
     handleOrientation(event) {
-        // Arrotonda i valori per ridurre le fluttuazioni minori
-        const alpha = event.alpha ? Math.round(event.alpha * 10) / 10 : 0;
-        const beta = event.beta ? Math.round(event.beta * 10) / 10 : 0;
-        const gamma = event.gamma ? Math.round(event.gamma * 10) / 10 : 0;
-
-        // Aggiorna solo se c'è una differenza significativa per evitare troppi update
-        if (!this.currentOrientation ||
-            Math.abs(alpha - this.currentOrientation.alpha) > 0.5 ||
-            Math.abs(beta - this.currentOrientation.beta) > 0.5 ||
-            Math.abs(gamma - this.currentOrientation.gamma) > 0.5)
-        {
-            this.currentOrientation = { alpha, beta, gamma };
-            this.onOrientationUpdate(this.currentOrientation); // Notifica l'app
+        // Alpha: rotazione attorno all'asse z (0-360)
+        // Beta: rotazione attorno all'asse x (-180 to 180)
+        // Gamma: rotazione attorno all'asse y (-90 to 90)
+        
+        // Dati grezzi dell'orientamento
+        const rawOrientation = {
+            alpha: event.alpha, // Direzione bussola (0-360)
+            beta: event.beta,   // Inclinazione frontale/posteriore
+            gamma: event.gamma  // Inclinazione laterale
+        };
+        
+        // Aggiungi alla cronologia e mantieni la lunghezza massima
+        this.orientationHistory.unshift(rawOrientation);
+        if (this.orientationHistory.length > this.maxHistoryLength) {
+            this.orientationHistory.pop();
         }
+        
+        // Calcola l'orientamento smussato
+        this.currentOrientation = this.calculateSmoothedOrientation();
+    }
+    
+    /**
+     * Calcola l'orientamento smussato dalla cronologia
+     */
+    calculateSmoothedOrientation() {
+        if (this.orientationHistory.length === 0) {
+            return null;
+        }
+        
+        // Se c'è solo una lettura, usala direttamente
+        if (this.orientationHistory.length === 1) {
+            return {...this.orientationHistory[0]};
+        }
+        
+        // Inizializza con valori zero
+        let alphaSin = 0, alphaCos = 0;
+        let betaSum = 0, gammaSum = 0;
+        let totalWeight = 0;
+        
+        // Calcola la media pesata, dando più peso alle letture recenti
+        this.orientationHistory.forEach((reading, index) => {
+            // Peso decrescente per le letture più vecchie
+            const weight = Math.pow(this.historyWeight, index);
+            totalWeight += weight;
+            
+            // Per alpha (direzione bussola) dobbiamo usare seno e coseno per gestire il wrap-around a 360°
+            const alphaRad = (reading.alpha * Math.PI) / 180;
+            alphaSin += Math.sin(alphaRad) * weight;
+            alphaCos += Math.cos(alphaRad) * weight;
+            
+            // Per beta e gamma possiamo usare medie normali
+            betaSum += reading.beta * weight;
+            gammaSum += reading.gamma * weight;
+        });
+        
+        // Normalizza e converti indietro
+        alphaSin /= totalWeight;
+        alphaCos /= totalWeight;
+        const alphaSmoothed = (Math.atan2(alphaSin, alphaCos) * 180 / Math.PI + 360) % 360;
+        
+        betaSum /= totalWeight;
+        gammaSum /= totalWeight;
+        
+        return {
+            alpha: alphaSmoothed,
+            beta: betaSum,
+            gamma: gammaSum
+        };
     }
 
     /**
      * Ottiene la posizione attuale
-     * @returns {Promise<object>} Promessa con la posizione { latitude, longitude, accuracy }
+     * @returns {Promise} Promessa con la posizione
      */
     getCurrentPosition() {
         return new Promise((resolve, reject) => {
-            this.onStatusUpdate("Ottenimento della posizione...");
-
+            this.updateStatus("Ottenimento della posizione...");
+            
             navigator.geolocation.getCurrentPosition(
                 (position) => {
-                    this.currentPosition = {
+                    const rawPosition = {
                         latitude: position.coords.latitude,
                         longitude: position.coords.longitude,
-                        accuracy: position.coords.accuracy
+                        accuracy: position.coords.accuracy,
+                        timestamp: position.timestamp
                     };
-                    this.onPositionUpdate(this.currentPosition); // Notifica l'app
-                    this.onStatusUpdate(`Posizione ottenuta (Acc: ${this.currentPosition.accuracy.toFixed(1)}m)`);
+                    
+                    // Aggiungi alla cronologia delle posizioni
+                    this.positionHistory.unshift(rawPosition);
+                    if (this.positionHistory.length > this.maxHistoryLength) {
+                        this.positionHistory.pop();
+                    }
+                    
+                    // Calcola la posizione smussata
+                    this.currentPosition = this.calculateSmoothedPosition();
+                    
+                    this.updateCoordinates(this.currentPosition);
+                    this.updateStatus("Posizione ottenuta con successo!");
                     resolve(this.currentPosition);
                 },
                 (error) => {
                     let errorMessage;
                     switch(error.code) {
-                        case error.PERMISSION_DENIED: errorMessage = "Permesso geolocalizzazione negato."; break;
-                        case error.POSITION_UNAVAILABLE: errorMessage = "Posizione non disponibile."; break;
-                        case error.TIMEOUT: errorMessage = "Timeout richiesta posizione."; break;
-                        default: errorMessage = "Errore sconosciuto geolocalizzazione.";
+                        case error.PERMISSION_DENIED:
+                            errorMessage = "Permesso di geolocalizzazione negato.";
+                            break;
+                        case error.POSITION_UNAVAILABLE:
+                            errorMessage = "Posizione non disponibile.";
+                            break;
+                        case error.TIMEOUT:
+                            errorMessage = "Timeout nella richiesta di posizione.";
+                            break;
+                        default:
+                            errorMessage = "Errore sconosciuto nella geolocalizzazione.";
                     }
-                    this.onStatusUpdate(errorMessage);
-                    console.error("Geolocation error:", error);
+                    this.updateStatus(errorMessage);
                     reject(errorMessage);
                 },
-                { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 } // Timeout aumentato
+                {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0
+                }
             );
         });
+    }
+    
+    /**
+     * Calcola la posizione smussata dalla cronologia
+     */
+    calculateSmoothedPosition() {
+        if (this.positionHistory.length === 0) {
+            return null;
+        }
+        
+        // Se c'è solo una lettura, usala direttamente
+        if (this.positionHistory.length === 1) {
+            return {...this.positionHistory[0]};
+        }
+        
+        // Filtra le posizioni con precisione molto scarsa
+        const maxAcceptableAccuracy = 100; // metri
+        const filteredPositions = this.positionHistory.filter(
+            pos => pos.accuracy <= maxAcceptableAccuracy
+        );
+        
+        // Se non ci sono posizioni valide, usa la più recente
+        if (filteredPositions.length === 0) {
+            return {...this.positionHistory[0]};
+        }
+        
+        // Inizializza con zero
+        let latSum = 0, lonSum = 0, accSum = 0;
+        let totalWeight = 0;
+        
+        // Calcola la media pesata, dando più peso alle letture recenti e precise
+        filteredPositions.forEach((reading, index) => {
+            // Peso basato su recenza e precisione
+            const recencyWeight = Math.pow(this.historyWeight, index);
+            const accuracyWeight = 1 / (reading.accuracy + 1); // +1 per evitare divisione per zero
+            const weight = recencyWeight * accuracyWeight;
+            
+            totalWeight += weight;
+            latSum += reading.latitude * weight;
+            lonSum += reading.longitude * weight;
+            accSum += reading.accuracy * weight;
+        });
+        
+        // Normalizza
+        latSum /= totalWeight;
+        lonSum /= totalWeight;
+        accSum /= totalWeight;
+        
+        return {
+            latitude: latSum,
+            longitude: lonSum,
+            accuracy: accSum,
+            timestamp: Date.now()
+        };
     }
 
     /**
      * Avvia il monitoraggio continuo della posizione
      */
     startPositionWatch() {
-        if (this.watchId !== null) {
-            console.log("Position watch already active.");
-            return;
-        }
-
-        this.onStatusUpdate("Avvio monitoraggio posizione...");
+        if (this.watchId !== null) return;
+        
         this.watchId = navigator.geolocation.watchPosition(
             (position) => {
-                this.currentPosition = {
+                const rawPosition = {
                     latitude: position.coords.latitude,
                     longitude: position.coords.longitude,
-                    accuracy: position.coords.accuracy
+                    accuracy: position.coords.accuracy,
+                    timestamp: position.timestamp
                 };
-                this.onPositionUpdate(this.currentPosition); // Notifica l'app
-
-                // Potremmo aggiungere qui logica per calcolare distanza/direzione
-                // all'oggetto più vicino e notificarlo tramite un'altra callback,
-                // ma per ora lo lasciamo fare ad App.js nel suo loop di update AR.
+                
+                // Aggiungi alla cronologia
+                this.positionHistory.unshift(rawPosition);
+                if (this.positionHistory.length > this.maxHistoryLength) {
+                    this.positionHistory.pop();
+                }
+                
+                // Applica lo smussamento
+                this.currentPosition = this.calculateSmoothedPosition();
+                
+                this.updateCoordinates(this.currentPosition);
+                
+                if (this.savedPosition) {
+                    const distance = this.calculateDistance(
+                        this.currentPosition.latitude,
+                        this.currentPosition.longitude,
+                        this.savedPosition.latitude,
+                        this.savedPosition.longitude
+                    );
+                    this.updateDistance(distance);
+                    
+                    // Calcolare la direzione verso l'oggetto posizionato
+                    if (this.savedOrientation) {
+                        const bearing = this.calculateBearing(
+                            this.currentPosition.latitude,
+                            this.currentPosition.longitude,
+                            this.savedPosition.latitude,
+                            this.savedPosition.longitude
+                        );
+                        
+                        // Calcola la differenza tra la direzione della bussola e la direzione verso l'oggetto
+                        // Questo può essere usato per guidare l'utente verso l'oggetto
+                        const headingDifference = this.currentOrientation ? 
+                            (bearing - this.currentOrientation.alpha + 360) % 360 : 0;
+                            
+                        // Aggiorniamo l'UI con la direzione
+                        this.updateDirection(bearing, headingDifference);
+                    }
+                }
             },
             (error) => {
-                this.onStatusUpdate("Errore durante il monitoraggio della posizione.");
-                console.error("Errore watchPosition:", error);
-                // Tentiamo di riavviare? O fermiamo? Per ora fermiamo.
-                this.stopPositionWatch();
+                this.updateStatus("Errore durante il monitoraggio della posizione.");
+                console.error("Errore di geolocalizzazione:", error);
             },
-            { enableHighAccuracy: true, timeout: 10000, maximumAge: 1000 } // maximumAge > 0 per usare cache
+            {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 0
+            }
         );
-        console.log("Position watch started (ID:", this.watchId, ")");
     }
 
     /**
@@ -193,17 +331,44 @@ class GeoManager {
     stopPositionWatch() {
         if (this.watchId !== null) {
             navigator.geolocation.clearWatch(this.watchId);
-            console.log("Position watch stopped (ID:", this.watchId, ")");
             this.watchId = null;
-            this.onStatusUpdate("Monitoraggio posizione fermato.");
         }
+    }
+
+    /**
+     * Salva la posizione e l'orientamento correnti
+     */
+    saveCurrentPositionAndOrientation() {
+        if (this.currentPosition) {
+            // Salviamo la posizione corrente senza lo smussamento
+            // per avere un punto di riferimento preciso
+            this.savedPosition = {...this.currentPosition};
+            
+            if (this.currentOrientation) {
+                this.savedOrientation = {...this.currentOrientation};
+                this.updateStatus(
+                    `Oggetto posizionato alle coordinate: ${this.savedPosition.latitude.toFixed(6)}, ${this.savedPosition.longitude.toFixed(6)} ` +
+                    `con direzione: ${this.savedOrientation.alpha.toFixed(1)}°`
+                );
+            } else {
+                this.updateStatus(
+                    `Oggetto posizionato alle coordinate: ${this.savedPosition.latitude.toFixed(6)}, ${this.savedPosition.longitude.toFixed(6)} ` +
+                    `(orientamento non disponibile)`
+                );
+            }
+            
+            return {
+                position: this.savedPosition,
+                orientation: this.savedOrientation
+            };
+        }
+        return null;
     }
 
     /**
      * Calcola la distanza tra due punti GPS in metri usando la formula di Haversine
      */
     calculateDistance(lat1, lon1, lat2, lon2) {
-        if (lat1 == null || lon1 == null || lat2 == null || lon2 == null) return 0;
         const R = 6371000; // Raggio della Terra in metri
         const φ1 = lat1 * Math.PI / 180;
         const φ2 = lat2 * Math.PI / 180;
@@ -211,37 +376,79 @@ class GeoManager {
         const Δλ = (lon2 - lon1) * Math.PI / 180;
 
         const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
-                  Math.cos(φ1) * Math.cos(φ2) *
-                  Math.sin(Δλ/2) * Math.sin(Δλ/2);
+                Math.cos(φ1) * Math.cos(φ2) *
+                Math.sin(Δλ/2) * Math.sin(Δλ/2);
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-
+        
         return R * c; // Distanza in metri
     }
-
+    
     /**
      * Calcola la direzione in gradi da un punto a un altro (bearing)
      * 0° = Nord, 90° = Est, 180° = Sud, 270° = Ovest
      */
     calculateBearing(lat1, lon1, lat2, lon2) {
-        if (lat1 == null || lon1 == null || lat2 == null || lon2 == null) return 0;
         const φ1 = lat1 * Math.PI / 180;
         const φ2 = lat2 * Math.PI / 180;
         const Δλ = (lon2 - lon1) * Math.PI / 180;
 
         const y = Math.sin(Δλ) * Math.cos(φ2);
         const x = Math.cos(φ1) * Math.sin(φ2) -
-                  Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
-
+                Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+                
         let bearing = Math.atan2(y, x) * 180 / Math.PI;
         bearing = (bearing + 360) % 360; // Converti in 0-360
-
+        
         return bearing;
     }
 
-    // Metodi rimossi: saveCurrentPositionAndOrientation, updateStatus, updateCoordinates, updateDistance, updateDirection
-    // La logica di salvataggio è ora in App.js
-    // Gli aggiornamenti UI avvengono tramite le callbacks fornite in init()
+    /**
+     * Aggiorna lo stato visualizzato
+     */
+    updateStatus(message) {
+        const statusElement = document.getElementById('statusMessage');
+        if (statusElement) {
+            statusElement.textContent = message;
+        }
+    }
+
+    /**
+     * Aggiorna le coordinate visualizzate
+     */
+    updateCoordinates(position) {
+        const coordElement = document.getElementById('coordinates');
+        if (coordElement && position) {
+            coordElement.textContent = `Lat: ${position.latitude.toFixed(6)}, Long: ${position.longitude.toFixed(6)}`;
+            
+            // Aggiungi informazione sulla precisione
+            if (position.accuracy) {
+                coordElement.textContent += ` (±${position.accuracy.toFixed(1)}m)`;
+            }
+        }
+    }
+
+    /**
+     * Aggiorna la distanza visualizzata
+     */
+    updateDistance(distance) {
+        const distElement = document.getElementById('distance');
+        if (distElement) {
+            distElement.textContent = `Distanza dall'oggetto: ${distance.toFixed(2)} metri`;
+            distElement.classList.remove('hidden');
+        }
+    }
+    
+    /**
+     * Aggiorna la direzione visualizzata
+     */
+    updateDirection(bearing, headingDifference) {
+        const dirElement = document.getElementById('direction');
+        if (dirElement) {
+            dirElement.textContent = `Direzione oggetto: ${bearing.toFixed(1)}°`;
+            dirElement.classList.remove('hidden');
+        }
+    }
 }
 
-// Esporta la classe (se necessario nel contesto globale)
+// Esporta la classe
 window.GeoManager = GeoManager;
