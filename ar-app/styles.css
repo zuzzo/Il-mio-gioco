@@ -177,6 +177,44 @@ body, html {
     gap: 10px;
 }
 
+/* Stili per il pulsante Copia Log */
+.debug-btn {
+    background-color: #9C27B0;
+    color: white;
+    padding: 8px 12px;
+    border-radius: var(--border-radius);
+    font-size: 0.8rem;
+    margin: 5px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.debug-btn:hover {
+    background-color: #7B1FA2;
+}
+
+/* Stili per il toast notification */
+#ar-debug-toast {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 10px 20px;
+    border-radius: 5px;
+    display: none;
+    z-index: 1000;
+    animation: fadeInOut 2s ease-in-out;
+}
+
+@keyframes fadeInOut {
+    0% { opacity: 0; }
+    10% { opacity: 1; }
+    90% { opacity: 1; }
+    100% { opacity: 0; }
+}
+
 button {
     padding: 12px 10px;
     border: none;
