@@ -14,6 +14,14 @@ class ARManager {
         this.savedObjectOrientation = 0; // Angolo in gradi
         this.videoElement = null;
         this.arActive = false;
+        
+        // Parametri per l'ancoraggio
+        this.isAnchored = false;
+        this.anchorPosition = null;
+        this.smoothingFactor = 0.1; // Fattore di smorzamento (più basso = più fluido)
+        this.anchorTimeout = null;
+        this.anchorDistance = 5; // Distanza in metri entro cui tentare l'ancoraggio
+        this.maxAnchorDistance = 15; // Distanza oltre la quale rimuovere l'ancoraggio
     }
 
     /**
@@ -23,29 +31,52 @@ class ARManager {
         this.canvas = document.getElementById(canvasId);
         this.videoElement = document.getElementById(videoId);
         
-        // Inizializza Babylon Engine
-        this.engine = new BABYLON.Engine(this.canvas, true);
+        if (!this.canvas) {
+            console.error("Canvas element non trovato:", canvasId);
+            this.updateStatus("Errore: elemento canvas non trovato");
+            return false;
+        }
         
-        // Crea una scena vuota
-        this.scene = this.createScene();
+        if (!this.videoElement) {
+            console.error("Video element non trovato:", videoId);
+            this.updateStatus("Errore: elemento video non trovato");
+            return false;
+        }
         
-        // Avvia il loop di rendering
-        this.engine.runRenderLoop(() => {
-            this.scene.render();
-        });
-        
-        // Gestisce il ridimensionamento della finestra
-        window.addEventListener('resize', () => {
-            this.engine.resize();
-        });
-        
-        // Avvia il flusso video dalla fotocamera
-        await this.startVideoStream();
-        
-        // Controlla se WebXR è supportato
-        this.isARSupported = await this.checkARSupport();
-        
-        return this.isARSupported;
+        try {
+            // Inizializza Babylon Engine
+            this.engine = new BABYLON.Engine(this.canvas, true);
+            
+            // Crea una scena vuota
+            this.scene = this.createScene();
+            
+            // Avvia il loop di rendering
+            this.engine.runRenderLoop(() => {
+                this.scene.render();
+            });
+            
+            // Gestisce il ridimensionamento della finestra
+            window.addEventListener('resize', () => {
+                this.engine.resize();
+            });
+            
+            // Avvia il flusso video dalla fotocamera
+            const cameraStarted = await this.startVideoStream();
+            
+            if (!cameraStarted) {
+                this.updateStatus("Impossibile avviare la fotocamera. Verifica i permessi.");
+                console.warn("Fotocamera non avviata correttamente");
+            }
+            
+            // Controlla se WebXR è supportato
+            this.isARSupported = await this.checkARSupport();
+            
+            return this.isARSupported;
+        } catch (error) {
+            console.error("Errore nell'inizializzazione dell'AR Manager:", error);
+            this.updateStatus("Errore inizializzazione: " + error.message);
+            return false;
+        }
     }
     
     /**
@@ -54,30 +85,67 @@ class ARManager {
     async startVideoStream() {
         try {
             if (!this.videoElement) {
-                console.warn("Elemento video non trovato");
+                console.error("Elemento video non trovato");
+                this.updateStatus("Errore: elemento video non trovato nel DOM");
                 return false;
             }
             
             const constraints = {
                 video: {
-                    facingMode: 'environment', // Usa la fotocamera posteriore
+                    facingMode: 'environment',
                     width: { ideal: 1280 },
                     height: { ideal: 720 }
                 }
             };
             
+            // Aggiungi un messaggio di stato
+            this.updateStatus("Richiesta accesso alla fotocamera...");
+            
             const stream = await navigator.mediaDevices.getUserMedia(constraints);
             this.videoElement.srcObject = stream;
+            
+            // Aggiungi gestori degli eventi
+            this.videoElement.onerror = (e) => {
+                console.error("Errore elemento video:", e);
+                this.updateStatus("Errore nell'inizializzazione del video");
+            };
+            
+            // Debug info
+            console.log("Stream ottenuto, impostato su elemento video:", this.videoElement.id);
+            console.log("Video tracks:", stream.getVideoTracks().length);
+            stream.getVideoTracks().forEach(track => {
+                console.log("Video track settings:", track.getSettings());
+            });
             
             // Attendi che il video sia pronto
             return new Promise((resolve) => {
                 this.videoElement.onloadedmetadata = () => {
-                    this.videoElement.play();
-                    resolve(true);
+                    console.log("Video metadata caricati, avvio riproduzione...");
+                    this.updateStatus("Fotocamera pronta");
+                    this.videoElement.play()
+                        .then(() => {
+                            console.log("Video avviato con successo");
+                            resolve(true);
+                        })
+                        .catch(err => {
+                            console.error("Errore nell'avvio del video:", err);
+                            this.updateStatus("Impossibile avviare lo stream video");
+                            resolve(false);
+                        });
                 };
+                
+                // Timeout per evitare blocchi
+                setTimeout(() => {
+                    if (this.videoElement.paused) {
+                        console.warn("Timeout nell'attesa del caricamento del video");
+                        this.updateStatus("Timeout fotocamera - riprova");
+                        resolve(false);
+                    }
+                }, 5000);
             });
         } catch (error) {
             console.error("Errore nell'accesso alla fotocamera:", error);
+            this.updateStatus("Errore fotocamera: " + error.message);
             return false;
         }
     }
@@ -121,7 +189,14 @@ class ARManager {
         try {
             // Per la nostra implementazione in finestra, non abbiamo bisogno del supporto WebXR completo
             // Verifichiamo solo se possiamo accedere alla fotocamera
-            return !!navigator.mediaDevices && !!navigator.mediaDevices.getUserMedia;
+            const isCameraSupported = !!navigator.mediaDevices && !!navigator.mediaDevices.getUserMedia;
+            
+            if (!isCameraSupported) {
+                this.updateStatus("Il tuo dispositivo non supporta l'accesso alla fotocamera");
+                return false;
+            }
+            
+            return true;
         } catch (error) {
             console.error("Errore nel controllo del supporto AR:", error);
             return false;
@@ -134,27 +209,47 @@ class ARManager {
     async startARExperience() {
         if (!this.videoElement) {
             console.error("Elemento video non trovato");
+            this.updateStatus("Errore: video non trovato");
             return false;
         }
         
         try {
             // Assicurati che il video sia in esecuzione
             if (this.videoElement.paused) {
-                await this.videoElement.play();
+                console.log("Video in pausa, riavvio...");
+                try {
+                    await this.videoElement.play();
+                    console.log("Video riavviato con successo");
+                } catch (e) {
+                    console.error("Impossibile riavviare il video:", e);
+                    
+                    // Riprova a inizializzare lo stream
+                    await this.startVideoStream();
+                }
             }
             
             // Imposta lo stato AR attivo
             this.isARMode = true;
             this.arActive = true;
             
+            // Reset dello stato di ancoraggio
+            this.isAnchored = false;
+            this.anchorPosition = null;
+            
             // Mostra gli elementi necessari
             this.videoElement.style.display = "block";
             this.canvas.style.display = "block";
             
+            // Verifica che il video sia effettivamente visibile
+            const videoComputed = window.getComputedStyle(this.videoElement);
+            console.log("Video visibility:", videoComputed.display, videoComputed.visibility);
+            
             console.log("Esperienza AR avviata in modalità finestra");
+            this.updateStatus("AR avviata");
             return true;
         } catch (error) {
             console.error("Errore nell'avvio dell'esperienza AR:", error);
+            this.updateStatus("Errore AR: " + error.message);
             return false;
         }
     }
@@ -166,25 +261,38 @@ class ARManager {
      */
     async placeVirtualObject(modelPath = 'assets/models/treasure.glb', deviceOrientation = 0) {
         if (!this.arActive) {
+            console.warn("AR non attiva, impossibile posizionare oggetto");
             return null;
         }
         
-        if (!this.arObject) {
+        // Reset dello stato di ancoraggio quando si posiziona un nuovo oggetto
+        this.isAnchored = false;
+        this.anchorPosition = null;
+        
+        try {
+            // Se esiste già un oggetto, rimuovilo
+            if (this.arObject) {
+                this.arObject.dispose();
+                this.arObject = null;
+            }
+            
+            // Salva l'orientamento dell'oggetto
+            this.savedObjectOrientation = deviceOrientation;
+            
+            // Mostra un cubo placeholder mentre il modello si carica
+            const placeholder = BABYLON.MeshBuilder.CreateBox("placeholder", {
+                width: 0.2, height: 0.2, depth: 0.2
+            }, this.scene);
+            
+            const placeholderMaterial = new BABYLON.StandardMaterial("placeholderMat", this.scene);
+            placeholderMaterial.diffuseColor = new BABYLON.Color3(0.5, 0.5, 0.5);
+            placeholderMaterial.alpha = 0.5;
+            placeholder.material = placeholderMaterial;
+            
+            this.updateStatus("Caricamento modello 3D...");
+            
+            // Carica il modello 3D
             try {
-                // Salva l'orientamento dell'oggetto
-                this.savedObjectOrientation = deviceOrientation;
-                
-                // Mostra un cubo placeholder mentre il modello si carica
-                const placeholder = BABYLON.MeshBuilder.CreateBox("placeholder", {
-                    width: 0.2, height: 0.2, depth: 0.2
-                }, this.scene);
-                
-                const placeholderMaterial = new BABYLON.StandardMaterial("placeholderMat", this.scene);
-                placeholderMaterial.diffuseColor = new BABYLON.Color3(0.5, 0.5, 0.5);
-                placeholderMaterial.alpha = 0.5;
-                placeholder.material = placeholderMaterial;
-                
-                // Carica il modello 3D
                 const result = await BABYLON.SceneLoader.ImportMeshAsync("", "", modelPath, this.scene);
                 
                 // Il modello caricato è nell'array result.meshes
@@ -210,19 +318,10 @@ class ARManager {
                 const orientationRadians = (this.savedObjectOrientation * Math.PI) / 180;
                 this.arObject.rotation.y = -orientationRadians;
                 
-                // Rimuovi il placeholder
-                placeholder.dispose();
-                
-                console.log(`Oggetto posizionato con orientamento: ${this.savedObjectOrientation.toFixed(1)}°`);
-                
-                // Mostra la freccia direzionale
-                const directionArrow = document.getElementById('directionArrow');
-                if (directionArrow) {
-                    directionArrow.classList.remove('hidden');
-                }
-                
-            } catch (error) {
-                console.error("Errore nel caricamento del modello 3D:", error);
+                this.updateStatus("Modello 3D caricato");
+            } catch (modelError) {
+                console.error("Errore nel caricamento del modello:", modelError);
+                this.updateStatus("Errore modello: " + modelError.message);
                 
                 // In caso di errore, usa un cubo rosso come fallback
                 this.arObject = BABYLON.MeshBuilder.CreateBox("arObject", {
@@ -241,18 +340,33 @@ class ARManager {
                 const orientationRadians = (this.savedObjectOrientation * Math.PI) / 180;
                 this.arObject.rotation.y = -orientationRadians;
             }
-        } else {
-            this.arObject.isVisible = true;
-        }
-        
-        // Aggiungi un'animazione di rotazione delicata
-        this.scene.registerBeforeRender(() => {
-            if (this.arObject) {
-                this.arObject.rotation.y += 0.002; // Rotazione più lenta e sottile
+            
+            // Rimuovi il placeholder
+            placeholder.dispose();
+            
+            console.log(`Oggetto posizionato con orientamento: ${this.savedObjectOrientation.toFixed(1)}°`);
+            
+            // Mostra la freccia direzionale
+            const directionArrow = document.getElementById('directionArrow');
+            if (directionArrow) {
+                directionArrow.classList.remove('hidden');
             }
-        });
-        
-        return this.arObject;
+            
+            // Aggiungi un'animazione di rotazione delicata
+            this.scene.registerBeforeRender(() => {
+                if (this.arObject) {
+                    // Rotazione più lenta quando l'oggetto è ancorato
+                    const rotationSpeed = this.isAnchored ? 0.001 : 0.002;
+                    this.arObject.rotation.y += rotationSpeed;
+                }
+            });
+            
+            return this.arObject;
+        } catch (error) {
+            console.error("Errore nel posizionamento dell'oggetto virtuale:", error);
+            this.updateStatus("Errore: " + error.message);
+            return null;
+        }
     }
     
     /**
@@ -300,27 +414,124 @@ class ARManager {
         // Converti la direzione da gradi a radianti
         const bearingRad = (bearing * Math.PI) / 180;
         
-        // Calcola la posizione relativa
-        const x = clampedDistance * Math.sin(bearingRad) * 0.5; // Ridotto per finestra
-        const z = clampedDistance * Math.cos(bearingRad) * 0.5; // Ridotto per finestra
+        // Calcola la posizione target relativa
+        const targetX = clampedDistance * Math.sin(bearingRad) * 0.5; // Ridotto per finestra
+        const targetZ = clampedDistance * Math.cos(bearingRad) * 0.5; // Ridotto per finestra
         
-        // Aggiorna la posizione
-        this.arObject.position = new BABYLON.Vector3(x, 0, z);
-        
-        // Aggiorna la scala in base alla distanza
-        this.arObject.scaling = new BABYLON.Vector3(
-            scaleFactor, 
-            scaleFactor, 
-            scaleFactor
-        );
+        // Gestione dell'ancoraggio
+        // Se l'oggetto è già ancorato e la distanza è ragionevole
+        if (this.isAnchored && distance < this.maxAnchorDistance) {
+            // Applica solo piccoli aggiustamenti alla posizione ancorata
+            // Usa un fattore di smorzamento più piccolo per l'oggetto ancorato
+            const anchorSmoothing = this.smoothingFactor * 0.2;
+            
+            // Calcola una piccola correzione basata sulla posizione GPS
+            if (this.arObject.position) {
+                this.arObject.position.x += (this.anchorPosition.x - this.arObject.position.x) * anchorSmoothing;
+                this.arObject.position.z += (this.anchorPosition.z - this.arObject.position.z) * anchorSmoothing;
+            }
+            
+            // Aggiorna la scala in base alla distanza, ma con variazioni più contenute
+            const anchoredScale = Math.max(0.4, 1 - (clampedDistance / maxDistance) * 0.5);
+            this.arObject.scaling = new BABYLON.Vector3(
+                anchoredScale, 
+                anchoredScale, 
+                anchoredScale
+            );
+            
+            // Mostra un indicatore di stato ancorato
+            const statusElement = document.getElementById('statusMessage');
+            if (statusElement && statusElement.textContent.indexOf("ancorato") === -1) {
+                this.updateStatus("Oggetto ancorato - posizione stabile");
+            }
+            
+            // Aggiungiamo una piccola oscillazione per dare un senso di vita all'oggetto ancorato
+            this.arObject.position.y = 0.05 * Math.sin(Date.now() * 0.001);
+            
+        } else {
+            // Se l'oggetto non è ancorato o è troppo lontano
+            
+            // Se l'oggetto è vicino ma non ancora ancorato, considera l'ancoraggio
+            if (!this.isAnchored && distance < this.anchorDistance) {
+                // Imposta un timer per l'ancoraggio se non esiste già
+                if (!this.anchorTimeout) {
+                    this.anchorTimeout = setTimeout(() => {
+                        // Salva la posizione attuale come punto di ancoraggio
+                        if (this.arObject && this.arObject.position) {
+                            this.anchorPosition = {
+                                x: this.arObject.position.x,
+                                z: this.arObject.position.z
+                            };
+                            this.isAnchored = true;
+                            console.log("Oggetto ancorato alla posizione corrente");
+                            
+                            // Aggiungi un effetto visivo per l'ancoraggio
+                            this.scene.beginAnimation(this.arObject, 0, 10, false, 1.0);
+                        }
+                        this.anchorTimeout = null;
+                    }, 1500); // Attendi 1.5 secondi di stabilità prima di ancorare
+                }
+            } else {
+                // Cancella il timer di ancoraggio se ci si allontana
+                if (this.anchorTimeout) {
+                    clearTimeout(this.anchorTimeout);
+                    this.anchorTimeout = null;
+                }
+            }
+            
+            // Se l'oggetto era ancorato ma ora è troppo lontano, rimuovi l'ancoraggio
+            if (this.isAnchored && distance > this.maxAnchorDistance) {
+                this.isAnchored = false;
+                this.anchorPosition = null;
+                console.log("Ancoraggio rimosso - oggetto troppo distante");
+            }
+            
+            // Movimento fluido dell'oggetto quando non è ancorato
+            if (this.arObject.position) {
+                // Applica smorzamento per rendere il movimento più fluido (lerp)
+                this.arObject.position.x += (targetX - this.arObject.position.x) * this.smoothingFactor;
+                this.arObject.position.z += (targetZ - this.arObject.position.z) * this.smoothingFactor;
+                
+                // Leggera oscillazione verticale per dare un senso di fluidità
+                this.arObject.position.y = 0.1 * Math.sin(Date.now() * 0.002);
+            } else {
+                // Prima posizione, imposta direttamente
+                this.arObject.position = new BABYLON.Vector3(targetX, 0, targetZ);
+            }
+            
+            // Aggiorna la scala in base alla distanza
+            this.arObject.scaling = new BABYLON.Vector3(
+                scaleFactor, 
+                scaleFactor, 
+                scaleFactor
+            );
+        }
         
         // Aggiorna l'orientamento della freccia direzionale
         const directionArrow = document.getElementById('directionArrow');
         if (directionArrow) {
             // Calcola la differenza tra la direzione dell'oggetto e l'orientamento del dispositivo
             const headingDifference = (bearing - deviceHeading + 360) % 360;
-            // Converti in CSS transform
+            
+            // Cambia lo stile della freccia in base allo stato di ancoraggio
+            if (this.isAnchored) {
+                directionArrow.style.color = "#00ff00"; // Verde per indicare che è ancorato
+            } else {
+                directionArrow.style.color = "#ffcc00"; // Colore originale
+            }
+            
+            // Aggiorna la rotazione
             directionArrow.style.transform = `translate(-50%, -50%) rotate(${headingDifference}deg)`;
+        }
+        
+        // Aggiorna la visualizzazione di distanza con indicazione di ancoraggio
+        const distanceEl = document.getElementById('distance');
+        if (distanceEl) {
+            if (this.isAnchored) {
+                distanceEl.textContent = `Distanza: ${distance.toFixed(1)} m (ancorato)`;
+            } else {
+                distanceEl.textContent = `Distanza: ${distance.toFixed(1)} m`;
+            }
         }
         
         return this.arObject;
@@ -332,6 +543,13 @@ class ARManager {
     stopARExperience() {
         this.isARMode = false;
         this.arActive = false;
+        this.isAnchored = false;
+        this.anchorPosition = null;
+        
+        if (this.anchorTimeout) {
+            clearTimeout(this.anchorTimeout);
+            this.anchorTimeout = null;
+        }
         
         // Nascondi la freccia direzionale
         const directionArrow = document.getElementById('directionArrow');
@@ -344,6 +562,18 @@ class ARManager {
         }
         
         console.log("Esperienza AR fermata");
+        this.updateStatus("AR fermata");
+    }
+    
+    /**
+     * Aggiorna lo stato visualizzato
+     */
+    updateStatus(message) {
+        const statusElement = document.getElementById('statusMessage');
+        if (statusElement) {
+            statusElement.textContent = message;
+        }
+        console.log("AR Status:", message);
     }
 }
 

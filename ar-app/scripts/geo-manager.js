@@ -174,7 +174,9 @@ class GeoManager {
                     // Calcola la posizione smussata
                     this.currentPosition = this.calculateSmoothedPosition();
                     
-                    this.updateCoordinates(this.currentPosition);
+                    // Non mostriamo più le coordinate nell'UI
+                    // this.updateCoordinates(this.currentPosition);
+                    
                     this.updateStatus("Posizione ottenuta con successo!");
                     resolve(this.currentPosition);
                 },
@@ -265,6 +267,8 @@ class GeoManager {
     startPositionWatch() {
         if (this.watchId !== null) return;
         
+        this.updateStatus("Monitoraggio posizione attivo...");
+        
         this.watchId = navigator.geolocation.watchPosition(
             (position) => {
                 const rawPosition = {
@@ -273,6 +277,12 @@ class GeoManager {
                     accuracy: position.coords.accuracy,
                     timestamp: position.timestamp
                 };
+                
+                // Log per debug
+                console.log("Posizione ricevuta:", 
+                    rawPosition.latitude.toFixed(6), 
+                    rawPosition.longitude.toFixed(6), 
+                    "acc:", rawPosition.accuracy.toFixed(1));
                 
                 // Aggiungi alla cronologia
                 this.positionHistory.unshift(rawPosition);
@@ -283,7 +293,8 @@ class GeoManager {
                 // Applica lo smussamento
                 this.currentPosition = this.calculateSmoothedPosition();
                 
-                this.updateCoordinates(this.currentPosition);
+                // Non mostriamo più le coordinate nell'UI
+                // this.updateCoordinates(this.currentPosition);
                 
                 if (this.savedPosition) {
                     const distance = this.calculateDistance(
@@ -332,6 +343,7 @@ class GeoManager {
         if (this.watchId !== null) {
             navigator.geolocation.clearWatch(this.watchId);
             this.watchId = null;
+            this.updateStatus("Monitoraggio posizione fermato");
         }
     }
 
@@ -347,12 +359,19 @@ class GeoManager {
             if (this.currentOrientation) {
                 this.savedOrientation = {...this.currentOrientation};
                 this.updateStatus(
-                    `Oggetto posizionato alle coordinate: ${this.savedPosition.latitude.toFixed(6)}, ${this.savedPosition.longitude.toFixed(6)} ` +
+                    `Oggetto posizionato con direzione: ${this.savedOrientation.alpha.toFixed(1)}°`
+                );
+                
+                // Log per debugging
+                console.log(
+                    `Oggetto salvato a: ${this.savedPosition.latitude.toFixed(6)}, ${this.savedPosition.longitude.toFixed(6)} ` +
                     `con direzione: ${this.savedOrientation.alpha.toFixed(1)}°`
                 );
             } else {
-                this.updateStatus(
-                    `Oggetto posizionato alle coordinate: ${this.savedPosition.latitude.toFixed(6)}, ${this.savedPosition.longitude.toFixed(6)} ` +
+                this.updateStatus("Oggetto posizionato (orientamento non disponibile)");
+                
+                console.log(
+                    `Oggetto salvato a: ${this.savedPosition.latitude.toFixed(6)}, ${this.savedPosition.longitude.toFixed(6)} ` +
                     `(orientamento non disponibile)`
                 );
             }
@@ -410,21 +429,7 @@ class GeoManager {
         if (statusElement) {
             statusElement.textContent = message;
         }
-    }
-
-    /**
-     * Aggiorna le coordinate visualizzate
-     */
-    updateCoordinates(position) {
-        const coordElement = document.getElementById('coordinates');
-        if (coordElement && position) {
-            coordElement.textContent = `Lat: ${position.latitude.toFixed(6)}, Long: ${position.longitude.toFixed(6)}`;
-            
-            // Aggiungi informazione sulla precisione
-            if (position.accuracy) {
-                coordElement.textContent += ` (±${position.accuracy.toFixed(1)}m)`;
-            }
-        }
+        console.log("GEO Status:", message);
     }
 
     /**
@@ -433,7 +438,7 @@ class GeoManager {
     updateDistance(distance) {
         const distElement = document.getElementById('distance');
         if (distElement) {
-            distElement.textContent = `Distanza dall'oggetto: ${distance.toFixed(2)} metri`;
+            distElement.textContent = `Distanza: ${distance.toFixed(1)} m`;
             distElement.classList.remove('hidden');
         }
     }
@@ -444,7 +449,7 @@ class GeoManager {
     updateDirection(bearing, headingDifference) {
         const dirElement = document.getElementById('direction');
         if (dirElement) {
-            dirElement.textContent = `Direzione oggetto: ${bearing.toFixed(1)}°`;
+            dirElement.textContent = `Direzione: ${bearing.toFixed(1)}°`;
             dirElement.classList.remove('hidden');
         }
     }
