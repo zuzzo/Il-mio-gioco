@@ -34,6 +34,7 @@ body, html {
     margin: 0 auto;
     box-shadow: var(--box-shadow);
     background-color: var(--pastel-blue-light);
+    position: relative; /* Importante per il posizionamento assoluto dei figli */
 }
 
 .app-header {
@@ -42,7 +43,7 @@ body, html {
     color: white;
     text-align: center;
     border-bottom: 2px solid var(--pastel-blue-darker);
-    z-index: 2; /* Assicura che l'header sia sopra altri elementi */
+    z-index: 10; /* Assicura che l'header sia sopra altri elementi */
 }
 
 .app-header h1 {
@@ -58,6 +59,7 @@ body, html {
     flex-direction: column;
     gap: 15px;
     z-index: 1;
+    position: relative; /* Importante per il posizionamento interno */
 }
 
 .app-footer {
@@ -66,7 +68,8 @@ body, html {
     border-top: 2px solid var(--pastel-blue-darker);
     display: flex;
     justify-content: center;
-    z-index: 2;
+    gap: 10px;
+    z-index: 10;
 }
 
 /* Contenitore della vista AR */
@@ -99,25 +102,24 @@ body, html {
 /* Video feed e canvas di rendering */
 #camera-feed {
     position: absolute;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    top: 0;
-    left: 0;
-    z-index: 1;
+    width: 100% !important;
+    height: 100% !important;
+    top: 0 !important;
+    left: 0 !important;
+    object-fit: cover !important;
+    z-index: 1 !important;
     display: block !important; /* Forza la visualizzazione */
-    transform: scaleX(-1); /* Corregge l'inversione della fotocamera posteriore su alcuni dispositivi */
 }
 
 #renderCanvas {
     position: absolute;
-    width: 100%;
-    height: 100%;
-    top: 0;
-    left: 0;
+    width: 100% !important;
+    height: 100% !important;
+    top: 0 !important;
+    left: 0 !important;
     z-index: 2;
     touch-action: none;
-    background-color: transparent; /* Canvas trasparente per vedere il video */
+    background-color: transparent !important; /* Canvas trasparente per vedere il video */
 }
 
 /* Pannello informazioni AR */
@@ -177,44 +179,6 @@ body, html {
     gap: 10px;
 }
 
-/* Stili per il pulsante Copia Log */
-.debug-btn {
-    background-color: #9C27B0;
-    color: white;
-    padding: 8px 12px;
-    border-radius: var(--border-radius);
-    font-size: 0.8rem;
-    margin: 5px;
-    cursor: pointer;
-    transition: background-color 0.2s;
-}
-
-.debug-btn:hover {
-    background-color: #7B1FA2;
-}
-
-/* Stili per il toast notification */
-#ar-debug-toast {
-    position: fixed;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(0, 0, 0, 0.8);
-    color: white;
-    padding: 10px 20px;
-    border-radius: 5px;
-    display: none;
-    z-index: 1000;
-    animation: fadeInOut 2s ease-in-out;
-}
-
-@keyframes fadeInOut {
-    0% { opacity: 0; }
-    10% { opacity: 1; }
-    90% { opacity: 1; }
-    100% { opacity: 0; }
-}
-
 button {
     padding: 12px 10px;
     border: none;
@@ -252,6 +216,8 @@ button {
 .info-btn {
     background-color: var(--info-color);
     color: white;
+    padding: 8px 15px;
+    font-size: 0.85rem;
 }
 
 .info-btn:hover {
@@ -370,6 +336,87 @@ button {
     cursor: pointer;
 }
 
+/* Stili per il pannello di debug */
+.debug-panel {
+    position: fixed;
+    bottom: 70px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 90%;
+    max-width: 500px;
+    background-color: rgba(0, 0, 0, 0.8);
+    color: #fff;
+    border-radius: 8px;
+    padding: 15px;
+    z-index: 1000;
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+.debug-panel h3 {
+    margin-top: 0;
+    color: #4CAF50;
+    border-bottom: 1px solid #555;
+    padding-bottom: 5px;
+}
+
+.debug-info {
+    margin: 10px 0;
+    font-family: monospace;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.debug-info div {
+    margin-bottom: 5px;
+    word-break: break-all;
+}
+
+.debug-info strong {
+    color: #ff9800;
+}
+
+.debug-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 15px;
+}
+
+.debug-actions button {
+    background-color: #444;
+    color: white;
+    border: 1px solid #666;
+    border-radius: 4px;
+    padding: 8px 12px;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.debug-actions button:hover {
+    background-color: #555;
+}
+
+#cameraStatus {
+    padding: 8px;
+    background-color: #333;
+    border-radius: 4px;
+    margin-bottom: 10px;
+    color: #4CAF50;
+    font-weight: bold;
+}
+
+/* Classe per evidenziare il video durante il debug */
+.video-debug {
+    outline: 2px solid red !important;
+    background-color: rgba(255, 0, 0, 0.2) !important;
+}
+
+/* Classe per mostrare i bordi per debug */
+.show-borders * {
+    outline: 1px dashed rgba(255, 255, 255, 0.3);
+}
+
 /* Responsive per dispositivi mobili */
 @media (max-width: 600px) {
     .control-buttons {
@@ -382,5 +429,14 @@ button {
     
     .app-header h1 {
         font-size: 1.2rem;
+    }
+    
+    .app-footer {
+        flex-wrap: wrap;
+    }
+    
+    .info-btn {
+        font-size: 0.8rem;
+        padding: 6px 10px;
     }
 }
