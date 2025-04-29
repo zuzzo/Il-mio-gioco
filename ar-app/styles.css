@@ -122,6 +122,60 @@ body, html {
     background-color: transparent !important; /* Canvas trasparente per vedere il video */
 }
 
+/* Slider per rotazione e dimensione */
+.slider-container {
+    background-color: var(--pastel-blue-dark);
+    padding: 10px;
+    border-radius: var(--border-radius);
+    margin-top: 10px;
+    color: white;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.slider-container label {
+    margin-right: 10px;
+    font-weight: bold;
+    width: 80px;
+}
+
+.slider {
+    flex-grow: 1;
+    height: 5px;
+    border-radius: 5px;
+    background: #d3d3d3;
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+    margin: 0 10px;
+}
+
+.slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--accent-color);
+    cursor: pointer;
+}
+
+.slider::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--accent-color);
+    cursor: pointer;
+    border: none;
+}
+
+.slider-container span {
+    min-width: 40px;
+    text-align: center;
+    font-weight: bold;
+}
+
 /* Pannello informazioni AR */
 .ar-info-panel {
     margin-top: 10px;
@@ -438,5 +492,14 @@ button {
     .info-btn {
         font-size: 0.8rem;
         padding: 6px 10px;
+    }
+    
+    .slider-container {
+        padding: 8px;
+    }
+    
+    .slider-container label {
+        width: 100%;
+        margin-bottom: 5px;
     }
 }

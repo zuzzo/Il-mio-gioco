@@ -37,6 +37,19 @@
                     </div>
                 </div>
                 
+                <!-- Slider per rotazione e dimensione -->
+                <div id="rotationSliderContainer" class="slider-container hidden">
+                    <label for="rotationSlider">Rotazione:</label>
+                    <input type="range" id="rotationSlider" min="0" max="360" value="0" class="slider">
+                    <span id="rotationValue">0°</span>
+                </div>
+                
+                <div id="scaleSliderContainer" class="slider-container hidden">
+                    <label for="scaleSlider">Dimensione:</label>
+                    <input type="range" id="scaleSlider" min="1" max="30" value="10" class="slider">
+                    <span id="scaleValue">1.0x</span>
+                </div>
+                
                 <div class="ar-info-panel">
                     <div id="distance" class="hidden"></div>
                     <div id="direction" class="hidden"></div>
@@ -95,8 +108,45 @@
             <button id="forceCameraBtn">Forza Camera</button>
             <button id="refreshVideoBtn">Aggiorna Video</button>
             <button id="showHiddenDataBtn">Mostra Dati</button>
-            <button id="copyLogBtn" class="debug-btn">Copia Log</button>
         </div>
     </div>
+    
+    <script>
+        // Script per gestire gli slider di rotazione e dimensione
+        document.addEventListener('DOMContentLoaded', function() {
+            const rotationSlider = document.getElementById('rotationSlider');
+            const rotationValue = document.getElementById('rotationValue');
+            const scaleSlider = document.getElementById('scaleSlider');
+            const scaleValue = document.getElementById('scaleValue');
+            
+            // Aggiorna il valore della rotazione quando lo slider cambia
+            rotationSlider.addEventListener('input', function() {
+                const angle = parseInt(this.value);
+                rotationValue.textContent = angle + '°';
+                
+                // Ottieni l'istanza ARManager e aggiorna la rotazione
+                if (window.ARManager) {
+                    const arManager = window.app ? window.app.arManager : null;
+                    if (arManager) {
+                        arManager.setObjectRotation(angle);
+                    }
+                }
+            });
+            
+            // Aggiorna il valore della scala quando lo slider cambia
+            scaleSlider.addEventListener('input', function() {
+                const scale = parseInt(this.value) / 10; // Dividi per 10 per avere valori decimali 0.1-3.0
+                scaleValue.textContent = scale.toFixed(1) + 'x';
+                
+                // Ottieni l'istanza ARManager e aggiorna la scala
+                if (window.ARManager) {
+                    const arManager = window.app ? window.app.arManager : null;
+                    if (arManager) {
+                        arManager.setObjectScale(scale);
+                    }
+                }
+            });
+        });
+    </script>
 </body>
 </html>
