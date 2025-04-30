@@ -3,133 +3,97 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AR Geolocalizzata</title>
-    <link rel="stylesheet" href="styles.css">
-    
-    <!-- Babylon.js -->
+    <title>Applicazione AR</title>
+    <link rel="stylesheet" href="style.css">
     <script src="https://cdn.babylonjs.com/babylon.js"></script>
     <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
-    <script src="https://cdn.babylonjs.com/gui/babylon.gui.min.js></script>
-    <script src="https://cdn.babylonjs.com/serializers/babylonjs.serializers.min.js"></script>
-    
-    <!-- Meta tag per forzare HTTPS -->
-    <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
-    
-    <!-- Gestione della geolocalizzazione e dell'AR -->
-    <script src="scripts/geo-manager.js" defer></script>
-    <script src="scripts/ar-manager.js" defer></script>
-    <script src="scripts/app.js" defer></script>
+    <script src="https://cdn.babylonjs.com/gui/babylon.gui.min.js"></script>
 </head>
 <body>
-    <div class="app-container">
-        <header class="app-header">
-            <h1>AR Geolocalizzata</h1>
-            <div id="statusMessage">Caricamento...</div>
-        </header>
-        
-        <main class="app-content">
-            <div class="ar-view-container">
-                <div class="ar-frame-border">
-                    <div class="ar-view" id="ar-view">
-                        <video id="camera-feed" autoplay playsinline muted></video>
-                        <canvas id="renderCanvas"></canvas>
-                    </div>
-                </div>
-                
-                <!-- Slider per rotazione e dimensione -->
-                <div id="rotationSliderContainer" class="slider-container">
-                    <label for="rotationSlider">Rotazione:</label>
-                    <input type="range" id="rotationSlider" min="0" max="360" value="0" class="slider">
-                    <span id="rotationValue">0°</span>
-                </div>
-                
-                <div id="scaleSliderContainer" class="slider-container">
-                    <label for="scaleSlider">Dimensione:</label>
-                    <input type="range" id="scaleSlider" min="1" max="30" value="10" class="slider">
-                    <span id="scaleValue">1.0x</span>
-                </div>
-            </div>
-            
-            <div class="model-selection">
-                <label for="model-select">Seleziona oggetto 3D:</label>
-                <select id="model-select">
-                    <option value="assets/models/treasure.glb">Forziere</option>
-                    <option value="assets/models/key.glb">Chiave</option>
-                    <option value="assets/models/door.glb">Porta</option>
-                    <option value="assets/models/custom.glb">Oggetto personalizzato</option>
-                </select>
-                
-                <div class="file-upload hidden">
-                    <label for="custom-model">Carica modello 3D (.glb):</label>
-                    <input type="file" id="custom-model" accept=".glb,.gltf">
-                </div>
-            </div>
-            
-            <div class="control-buttons">
-                <button id="placeObjectBtn" class="primary-btn" disabled>Posiziona oggetto</button>
-                <button id="startARBtn" class="primary-btn" disabled>Forza VR</button>
-                <button id="clearDataBtn" class="danger-btn">Cancella dati</button>
-                <div class="anchor-toggle">
-                    <label class="switch">
-                        <input type="checkbox" id="autoAnchorToggle" checked>
-                        <span class="slider round"></span>
-                    </label>
-                    <span>Ancoraggio Auto</span>
-                </div>
-            </div>
-        </main>
-        
-        <footer class="app-footer">
-            <button id="debugBtn" class="info-btn">Debug</button>
-            <button id="toggleCameraDebugBtn" class="info-btn">Debug Camera</button>
-        </footer>
-    </div>
-    
-    <!-- Notifiche browser -->
-    <div id="browserNotification" class="notification hidden">
-        <p>Per una migliore esperienza, è consigliato utilizzare Microsoft Edge o Google Chrome su dispositivi Android.</p>
-        <button class="close-notification">Chiudi</button>
-    </div>
-    
-    <!-- Pannello di debug della fotocamera -->
-    <div id="cameraDebugPanel" class="debug-panel hidden">
-        <h3>Debug Fotocamera</h3>
-        <div id="cameraStatus">In attesa...</div>
-        <div class="debug-info">
-            <div><strong>Video Element:</strong> <span id="videoElementStatus">-</span></div>
-            <div><strong>Stream Info:</strong> <span id="streamInfo">-</span></div>
-            <div><strong>Errori:</strong> <span id="cameraErrors">-</span></div>
-            <div><strong>Dimensioni:</strong> <span id="videoDimensions">-</span></div>
-            <div><strong>Play State:</strong> <span id="videoPlayState">-</span></div>
+    <div class="container">
+        <div id="ar-view">
+            <video id="camera-feed" autoplay playsinline muted></video>
+            <canvas id="render-canvas"></canvas>
         </div>
-        <div class="debug-actions">
-            <button id="forceCameraBtn">Forza Camera</button>
-            <button id="refreshVideoBtn">Aggiorna Video</button>
-            <button id="showHiddenDataBtn">Mostra Dati</button>
+        
+        <div class="control-panel">
+            <div class="slider vertical" id="distance-slider">
+                <input type="range" min="1" max="10" value="5" id="distance-input">
+                <span id="distance-value">5m</span>
+            </div>
+            
+            <div class="slider horizontal" id="rotation-slider">
+                <input type="range" min="0" max="360" value="0" id="rotation-input">
+                <span id="rotation-value">0°</span>
+            </div>
+            
+            <div class="button-group">
+                <button id="confirm-btn" class="primary">Conferma</button>
+                <button id="cancel-btn" class="secondary">Annulla</button>
+            </div>
         </div>
     </div>
     
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            const rotationSlider = document.getElementById('rotationSlider');
-            const rotationValue = document.getElementById('rotationValue');
-            const scaleSlider = document.getElementById('scaleSlider');
-            const scaleValue = document.getElementById('scaleValue');
+            // Inizializzazione
+            const cameraFeed = document.getElementById('camera-feed');
+            const canvas = document.getElementById('render-canvas');
+            const engine = new BABYLON.Engine(canvas, true);
+            const scene = new BABYLON.Scene(engine);
+            const camera = new BABYLON.ArcRotateCamera("Camera", 0, 0, 0, BABYLON.Vector3.Zero(), scene);
             
-            rotationSlider.addEventListener('input', function() {
-                const angle = parseInt(this.value);
-                rotationValue.textContent = angle + '°';
-                if (window.ARManager && window.app?.arManager) {
-                    window.app.arManager.setObjectRotation(angle);
-                }
+            // Configurazione fotocamera
+            navigator.mediaDevices.getUserMedia({ 
+                video: { 
+                    facingMode: 'environment',
+                    width: { ideal: 1920 },
+                    height: { ideal: 1080 }
+                } 
+            })
+            .then(stream => {
+                cameraFeed.srcObject = stream;
+                cameraFeed.play();
+            })
+            .catch(err => {
+                console.error("Errore fotocamera:", err);
+                alert("Errore nell'accesso alla fotocamera. Verifica i permessi.");
             });
             
-            scaleSlider.addEventListener('input', function() {
-                const scale = parseInt(this.value) / 10;
-                scaleValue.textContent = scale.toFixed(1) + 'x';
-                if (window.ARManager && window.app?.arManager) {
-                    window.app.arManager.setObjectScale(scale);
-                }
+            // Gestione controlli
+            document.getElementById('distance-input').addEventListener('input', updateDistance);
+            document.getElementById('rotation-input').addEventListener('input', updateRotation);
+            document.getElementById('confirm-btn').addEventListener('click', confirmPlacement);
+            document.getElementById('cancel-btn').addEventListener('click', cancelPlacement);
+            
+            function updateDistance() {
+                const value = document.getElementById('distance-input').value;
+                document.getElementById('distance-value').textContent = value + 'm';
+                // Aggiorna la posizione dell'oggetto
+            }
+            
+            function updateRotation() {
+                const value = document.getElementById('rotation-input').value;
+                document.getElementById('rotation-value').textContent = value + '°';
+                // Aggiorna la rotazione dell'oggetto
+            }
+            
+            function confirmPlacement() {
+                // Logica per confermare il posizionamento
+                alert("Oggetto posizionato con successo!");
+            }
+            
+            function cancelPlacement() {
+                // Logica per annullare il posizionamento
+                alert("Posizionamento annullato");
+            }
+            
+            engine.runRenderLoop(() => {
+                scene.render();
+            });
+            
+            window.addEventListener('resize', () => {
+                engine.resize();
             });
         });
     </script>
