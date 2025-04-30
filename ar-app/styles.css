@@ -473,13 +473,26 @@ button {
 
 /* Responsive per dispositivi mobili */
 @media (max-width: 600px) {
-    .control-buttons {
-        grid-template-columns: 1fr;
-    }
-    
-    .app-content {
-        padding: 10px;
-    }
+.control-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 20px;
+    justify-content: center;
+}
+
+.lock-icon {
+    margin-right: 5px;
+    font-size: 1.1em;
+}
+
+#toggleAnchorBtn.anchored .lock-icon {
+    content: "🔒";
+}
+
+#toggleAnchorBtn:not(.anchored) .lock-icon {
+    content: "🔓";
+}
     
     .app-header h1 {
         font-size: 1.2rem;

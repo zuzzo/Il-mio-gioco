@@ -12,12 +12,17 @@ class App {
         this.getLocationBtn = document.getElementById('getLocationBtn');
         this.placeObjectBtn = document.getElementById('placeObjectBtn');
         this.startARBtn = document.getElementById('startARBtn');
+        this.toggleAnchorBtn = document.getElementById('toggleAnchorBtn');
         this.modelSelect = document.getElementById('model-select');
         this.customModelInput = document.getElementById('custom-model');
         this.fileUploadDiv = document.querySelector('.file-upload');
         this.orientationInfo = document.getElementById('orientationInfo');
         this.debugBtn = document.getElementById('debugBtn');
         this.clearDataBtn = document.getElementById('clearDataBtn');
+
+        // Stato ancoraggio
+        this.isAnchored = false;
+        this.anchoredPosition = null;
         
         // Dati dell'applicazione
         this.objectPlaced = false;
@@ -32,6 +37,8 @@ class App {
         
         // Stato AR
         this.arVisualizationActive = false;
+        this.isAnchored = false;
+        this.anchoredPosition = null;
     }
     
     /**
@@ -374,6 +381,13 @@ class App {
      * Configura i listener degli eventi
      */
     setupEventListeners() {
+        // Gestione ancoraggio
+        if (this.toggleAnchorBtn) {
+            this.toggleAnchorBtn.addEventListener('click', () => {
+                this.toggleAnchor();
+            });
+        }
+
         // Ottieni posizione GPS
         if (this.getLocationBtn) {
             this.getLocationBtn.addEventListener('click', async () => {
@@ -604,6 +618,24 @@ class App {
     /**
      * Mostra un messaggio di stato
      */
+    toggleAnchor() {
+        this.isAnchored = !this.isAnchored;
+        if (this.isAnchored) {
+            // Salva la posizione corrente
+            this.anchoredPosition = {
+                distance: this.geoManager.currentPosition,
+                bearing: this.geoManager.currentOrientation?.alpha || 0,
+                heading: this.geoManager.currentOrientation?.alpha || 0
+            };
+            this.toggleAnchorBtn.innerHTML = '<span class="lock-icon">🔒</span> Sblocca';
+            this.showStatus("Oggetto ancorato all'immagine");
+        } else {
+            this.anchoredPosition = null;
+            this.toggleAnchorBtn.innerHTML = '<span class="lock-icon">🔓</span> Ancora';
+            this.showStatus("Oggetto sbloccato");
+        }
+    }
+
     showStatus(message) {
         const statusElement = document.getElementById('statusMessage');
         if (statusElement) {

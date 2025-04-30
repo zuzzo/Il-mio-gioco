@@ -68,8 +68,7 @@ class ARManager {
                 this.engine.resize();
             });
             
-            // Inizializza il sistema di debug della fotocamera
-            this.initCameraDebug();
+        // Rimuove l'inizializzazione del debug
             
             // Avvia subito il flusso video dalla fotocamera (come fa il debug)
             // Questo risolve il problema dello schermo nero
