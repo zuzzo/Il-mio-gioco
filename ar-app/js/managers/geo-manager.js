@@ -7,7 +7,7 @@ class GeoManager {
         this.currentOrientation = null;
         this.watchId = null;
         this.isListeningOrientation = false;
-        
+
         // Variabili per migliorare la stabilità
         this.positionHistory = [];
         this.orientationHistory = [];
@@ -23,17 +23,17 @@ class GeoManager {
             console.error("Il browser non supporta la geolocalizzazione");
             return false;
         }
-        
+
         // Verifica il supporto per l'orientamento del dispositivo
         if (window.DeviceOrientationEvent) {
             this.startOrientationTracking();
         } else {
             console.warn("Il dispositivo non supporta la rilevazione dell'orientamento");
         }
-        
+
         // Avvia il monitoraggio della posizione
         this.startPositionWatch();
-        
+
         return true;
     }
 
@@ -83,24 +83,24 @@ class GeoManager {
         // Alpha: rotazione attorno all'asse z (0-360)
         // Beta: rotazione attorno all'asse x (-180 to 180)
         // Gamma: rotazione attorno all'asse y (-90 to 90)
-        
+
         // Dati grezzi dell'orientamento
         const rawOrientation = {
             alpha: event.alpha, // Direzione bussola (0-360)
             beta: event.beta,   // Inclinazione frontale/posteriore
             gamma: event.gamma  // Inclinazione laterale
         };
-        
+
         // Aggiungi alla cronologia e mantieni la lunghezza massima
         this.orientationHistory.unshift(rawOrientation);
         if (this.orientationHistory.length > this.maxHistoryLength) {
             this.orientationHistory.pop();
         }
-        
+
         // Calcola l'orientamento smussato
         this.currentOrientation = this.calculateSmoothedOrientation();
     }
-    
+
     /**
      * Calcola l'orientamento smussato dalla cronologia
      */
@@ -108,41 +108,41 @@ class GeoManager {
         if (this.orientationHistory.length === 0) {
             return null;
         }
-        
+
         // Se c'è solo una lettura, usala direttamente
         if (this.orientationHistory.length === 1) {
             return {...this.orientationHistory[0]};
         }
-        
+
         // Inizializza con valori zero
         let alphaSin = 0, alphaCos = 0;
         let betaSum = 0, gammaSum = 0;
         let totalWeight = 0;
-        
+
         // Calcola la media pesata, dando più peso alle letture recenti
         this.orientationHistory.forEach((reading, index) => {
             // Peso decrescente per le letture più vecchie
             const weight = Math.pow(this.historyWeight, index);
             totalWeight += weight;
-            
+
             // Per alpha (direzione bussola) dobbiamo usare seno e coseno per gestire il wrap-around a 360°
             const alphaRad = (reading.alpha * Math.PI) / 180;
             alphaSin += Math.sin(alphaRad) * weight;
             alphaCos += Math.cos(alphaRad) * weight;
-            
+
             // Per beta e gamma possiamo usare medie normali
             betaSum += reading.beta * weight;
             gammaSum += reading.gamma * weight;
         });
-        
+
         // Normalizza e converti indietro
         alphaSin /= totalWeight;
         alphaCos /= totalWeight;
         const alphaSmoothed = (Math.atan2(alphaSin, alphaCos) * 180 / Math.PI + 360) % 360;
-        
+
         betaSum /= totalWeight;
         gammaSum /= totalWeight;
-        
+
         return {
             alpha: alphaSmoothed,
             beta: betaSum,
@@ -157,7 +157,7 @@ class GeoManager {
     getCurrentPosition() {
         return new Promise((resolve, reject) => {
             console.log("Ottenimento della posizione...");
-            
+
             navigator.geolocation.getCurrentPosition(
                 (position) => {
                     const rawPosition = {
@@ -166,16 +166,16 @@ class GeoManager {
                         accuracy: position.coords.accuracy,
                         timestamp: position.timestamp
                     };
-                    
+
                     // Aggiungi alla cronologia delle posizioni
                     this.positionHistory.unshift(rawPosition);
                     if (this.positionHistory.length > this.maxHistoryLength) {
                         this.positionHistory.pop();
                     }
-                    
+
                     // Calcola la posizione smussata
                     this.currentPosition = this.calculateSmoothedPosition();
-                    
+
                     console.log("Posizione ottenuta con successo!");
                     resolve(this.currentPosition);
                 },
@@ -205,7 +205,7 @@ class GeoManager {
             );
         });
     }
-    
+
     /**
      * Calcola la posizione smussata dalla cronologia
      */
@@ -213,45 +213,45 @@ class GeoManager {
         if (this.positionHistory.length === 0) {
             return null;
         }
-        
+
         // Se c'è solo una lettura, usala direttamente
         if (this.positionHistory.length === 1) {
             return {...this.positionHistory[0]};
         }
-        
+
         // Filtra le posizioni con precisione molto scarsa
         const maxAcceptableAccuracy = 100; // metri
         const filteredPositions = this.positionHistory.filter(
             pos => pos.accuracy <= maxAcceptableAccuracy
         );
-        
+
         // Se non ci sono posizioni valide, usa la più recente
         if (filteredPositions.length === 0) {
             return {...this.positionHistory[0]};
         }
-        
+
         // Inizializza con zero
         let latSum = 0, lonSum = 0, accSum = 0;
         let totalWeight = 0;
-        
+
         // Calcola la media pesata, dando più peso alle letture recenti e precise
         filteredPositions.forEach((reading, index) => {
             // Peso basato su recenza e precisione
             const recencyWeight = Math.pow(this.historyWeight, index);
             const accuracyWeight = 1 / (reading.accuracy + 1); // +1 per evitare divisione per zero
             const weight = recencyWeight * accuracyWeight;
-            
+
             totalWeight += weight;
             latSum += reading.latitude * weight;
             lonSum += reading.longitude * weight;
             accSum += reading.accuracy * weight;
         });
-        
+
         // Normalizza
         latSum /= totalWeight;
         lonSum /= totalWeight;
         accSum /= totalWeight;
-        
+
         return {
             latitude: latSum,
             longitude: lonSum,
@@ -265,9 +265,9 @@ class GeoManager {
      */
     startPositionWatch() {
         if (this.watchId !== null) return;
-        
+
         console.log("Monitoraggio posizione attivo...");
-        
+
         this.watchId = navigator.geolocation.watchPosition(
             (position) => {
                 const rawPosition = {
@@ -276,13 +276,13 @@ class GeoManager {
                     accuracy: position.coords.accuracy,
                     timestamp: position.timestamp
                 };
-                
+
                 // Aggiungi alla cronologia
                 this.positionHistory.unshift(rawPosition);
                 if (this.positionHistory.length > this.maxHistoryLength) {
                     this.positionHistory.pop();
                 }
-                
+
                 // Applica lo smussamento
                 this.currentPosition = this.calculateSmoothedPosition();
             },
@@ -322,10 +322,10 @@ class GeoManager {
                 Math.cos(φ1) * Math.cos(φ2) *
                 Math.sin(Δλ/2) * Math.sin(Δλ/2);
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-        
+
         return R * c; // Distanza in metri
     }
-    
+
     /**
      * Calcola la direzione in gradi da un punto a un altro (bearing)
      * 0° = Nord, 90° = Est, 180° = Sud, 270° = Ovest
@@ -343,13 +343,13 @@ class GeoManager {
         const y = Math.sin(Δλ) * Math.cos(φ2);
         const x = Math.cos(φ1) * Math.sin(φ2) -
                 Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
-                
+
         let bearing = Math.atan2(y, x) * 180 / Math.PI;
         bearing = (bearing + 360) % 360; // Converti in 0-360
-        
+
         return bearing;
     }
-    
+
     /**
      * Calcola la distanza in metri tra due latitudini
      * @param {number} lat1 - Latitudine punto 1
@@ -360,10 +360,10 @@ class GeoManager {
         const R = 6371000; // Raggio della Terra in metri
         const φ1 = lat1 * Math.PI / 180;
         const φ2 = lat2 * Math.PI / 180;
-        
+
         return R * (φ2 - φ1);
     }
-    
+
     /**
      * Calcola la distanza in metri tra due longitudini
      * @param {number} lon1 - Longitudine punto 1
@@ -375,7 +375,7 @@ class GeoManager {
         const R = 6371000; // Raggio della Terra in metri
         const φ = lat * Math.PI / 180; // Latitudine in radianti
         const Δλ = (lon2 - lon1) * Math.PI / 180;
-        
+
         return R * Math.cos(φ) * Δλ;
     }
 }

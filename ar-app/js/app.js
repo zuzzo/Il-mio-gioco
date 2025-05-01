@@ -1,331 +1,160 @@
 /**
- * Gestisce la geolocalizzazione, l'orientamento e il calcolo delle distanze
+ * Classe principale dell'applicazione AR
  */
-class GeoManager {
+class App {
     constructor() {
-        this.currentPosition = null;
-        this.currentOrientation = null;
-        this.watchId = null;
-        this.isListeningOrientation = false;
-        
-        // Variabili per migliorare la stabilità
-        this.positionHistory = [];
-        this.orientationHistory = [];
-        this.maxHistoryLength = 5; // Numero di letture da memorizzare per smussare
-        this.historyWeight = 0.7; // Peso per le letture recenti vs quelle vecchie
-    }
+        // Elementi DOM principali
+        this.arView = document.getElementById('ar-view');
+        this.mapView = document.getElementById('map-view');
+        this.debugPanel = document.getElementById('debug-panel');
+        this.debugContent = document.getElementById('debug-content');
 
-    /**
-     * Inizializza il gestore di geolocalizzazione
-     */
-    init() {
-        if (!navigator.geolocation) {
-            console.error("Il browser non supporta la geolocalizzazione");
-            return false;
-        }
-        
-        // Verifica il supporto per l'orientamento del dispositivo
-        if (window.DeviceOrientationEvent) {
-            this.startOrientationTracking();
-        } else {
-            console.warn("Il dispositivo non supporta la rilevazione dell'orientamento");
-        }
-        
-        // Avvia il monitoraggio della posizione
-        this.startPositionWatch();
-        
-        return true;
-    }
-
-    /**
-     * Inizia a monitorare l'orientamento del dispositivo
-     */
-    startOrientationTracking() {
-        if (this.isListeningOrientation) return;
-
-        // Verifichiamo se è necessaria un'autorizzazione (iOS 13+)
-        if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-            console.log("Richiesta permesso per l'orientamento...");
-
-            DeviceOrientationEvent.requestPermission()
-                .then(permissionState => {
-                    if (permissionState === 'granted') {
-                        this.addOrientationListener();
-                    } else {
-                        console.warn("Permesso per l'orientamento negato");
-                    }
-                })
-                .catch(error => {
-                    console.error("Errore nella richiesta di permesso:", error);
-                    // Tentiamo comunque di aggiungere il listener, potrebbe funzionare su altri dispositivi
-                    this.addOrientationListener();
-                });
-        } else {
-            // Non è richiesta l'autorizzazione, aggiungiamo direttamente il listener
-            this.addOrientationListener();
-        }
-    }
-
-    /**
-     * Aggiunge l'event listener per l'orientamento
-     */
-    addOrientationListener() {
-        window.addEventListener('deviceorientation', this.handleOrientation.bind(this));
-        this.isListeningOrientation = true;
-        console.log("Monitoraggio orientamento avviato");
-    }
-
-    /**
-     * Gestisce i dati di orientamento del dispositivo
-     * @param {DeviceOrientationEvent} event - Evento di orientamento
-     */
-    handleOrientation(event) {
-        // Alpha: rotazione attorno all'asse z (0-360)
-        // Beta: rotazione attorno all'asse x (-180 to 180)
-        // Gamma: rotazione attorno all'asse y (-90 to 90)
-        
-        // Dati grezzi dell'orientamento
-        const rawOrientation = {
-            alpha: event.alpha, // Direzione bussola (0-360)
-            beta: event.beta,   // Inclinazione frontale/posteriore
-            gamma: event.gamma  // Inclinazione laterale
-        };
-        
-        // Aggiungi alla cronologia e mantieni la lunghezza massima
-        this.orientationHistory.unshift(rawOrientation);
-        if (this.orientationHistory.length > this.maxHistoryLength) {
-            this.orientationHistory.pop();
-        }
-        
-        // Calcola l'orientamento smussato
-        this.currentOrientation = this.calculateSmoothedOrientation();
-    }
-    
-    /**
-     * Calcola l'orientamento smussato dalla cronologia
-     */
-    calculateSmoothedOrientation() {
-        if (this.orientationHistory.length === 0) {
-            return null;
-        }
-        
-        // Se c'è solo una lettura, usala direttamente
-        if (this.orientationHistory.length === 1) {
-            return {...this.orientationHistory[0]};
-        }
-        
-        // Inizializza con valori zero
-        let alphaSin = 0, alphaCos = 0;
-        let betaSum = 0, gammaSum = 0;
-        let totalWeight = 0;
-        
-        // Calcola la media pesata, dando più peso alle letture recenti
-        this.orientationHistory.forEach((reading, index) => {
-            // Peso decrescente per le letture più vecchie
-            const weight = Math.pow(this.historyWeight, index);
-            totalWeight += weight;
-            
-            // Per alpha (direzione bussola) dobbiamo usare seno e coseno per gestire il wrap-around a 360°
-            const alphaRad = (reading.alpha * Math.PI) / 180;
-            alphaSin += Math.sin(alphaRad) * weight;
-            alphaCos += Math.cos(alphaRad) * weight;
-            
-            // Per beta e gamma possiamo usare medie normali
-            betaSum += reading.beta * weight;
-            gammaSum += reading.gamma * weight;
-        });
-        
-        // Normalizza e converti indietro
-        alphaSin /= totalWeight;
-        alphaCos /= totalWeight;
-        const alphaSmoothed = (Math.atan2(alphaSin, alphaCos) * 180 / Math.PI + 360) % 360;
-        
-        betaSum /= totalWeight;
-        gammaSum /= totalWeight;
-        
-        return {
-            alpha: alphaSmoothed,
-            beta: betaSum,
-            gamma: gammaSum
-        };
-    }
-
-    /**
-     * Ottiene la posizione attuale
-     * @returns {Promise} Promessa con la posizione
-     */
-    getCurrentPosition() {
-        return new Promise((resolve, reject) => {
-            console.log("Ottenimento della posizione...");
-            
-            navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    const rawPosition = {
-                        latitude: position.coords.latitude,
-                        longitude: position.coords.longitude,
-                        accuracy: position.coords.accuracy,
-                        timestamp: position.timestamp
-                    };
-                    
-                    // Aggiungi alla cronologia delle posizioni
-                    this.positionHistory.unshift(rawPosition);
-                    if (this.positionHistory.length > this.maxHistoryLength) {
-                        this.positionHistory.pop();
-                    }
-                    
-                    // Calcola la posizione smussata
-                    this.currentPosition = this.calculateSmoothedPosition();
-                    
-                    console.log("Posizione ottenuta con successo!");
-                    resolve(this.currentPosition);
-                },
-                (error) => {
-                    let errorMessage;
-                    switch(error.code) {
-                        case error.PERMISSION_DENIED:
-                            errorMessage = "Permesso di geolocalizzazione negato.";
-                            break;
-                        case error.POSITION_UNAVAILABLE:
-                            errorMessage = "Posizione non disponibile.";
-                            break;
-                        case error.TIMEOUT:
-                            errorMessage = "Timeout nella richiesta di posizione.";
-                            break;
-                        default:
-                            errorMessage = "Errore sconosciuto nella geolocalizzazione.";
-                    }
-                    console.error(errorMessage);
-                    reject(errorMessage);
-                },
-                {
-                    enableHighAccuracy: true,
-                    timeout: 10000,
-                    maximumAge: 0
-                }
-            );
-        });
-    }
-    
-    /**
-     * Calcola la posizione smussata dalla cronologia
-     */
-    calculateSmoothedPosition() {
-        if (this.positionHistory.length === 0) {
-            return null;
-        }
-        
-        // Se c'è solo una lettura, usala direttamente
-        if (this.positionHistory.length === 1) {
-            return {...this.positionHistory[0]};
-        }
-        
-        // Filtra le posizioni con precisione molto scarsa
-        const maxAcceptableAccuracy = 100; // metri
-        const filteredPositions = this.positionHistory.filter(
-            pos => pos.accuracy <= maxAcceptableAccuracy
+        // Manager
+        this.geoManager = new GeoManager();
+        this.arManager = new ARManager(
+            document.getElementById('render-canvas'),
+            document.getElementById('camera-feed'),
+            this // Passa l'istanza dell'app all'ARManager
         );
-        
-        // Se non ci sono posizioni valide, usa la più recente
-        if (filteredPositions.length === 0) {
-            return {...this.positionHistory[0]};
+        this.storageManager = new StorageManager();
+
+        // Menu
+        this.menu1 = new Menu1(this);
+        this.menu2 = new Menu2(this);
+        this.menu3 = new Menu3(this);
+        this.menu4 = new Menu4(this);
+        this.debugUtil = new DebugUtil(this); // Assumendo che DebugUtil sia la classe in debug.js
+
+        // Stato corrente
+        this.currentMenu = null;
+    }
+
+    /**
+     * Inizializza l'applicazione
+     */
+    async init() {
+        console.log("Inizializzazione App...");
+        this.log("Avvio applicazione...");
+
+        // Inizializza i manager
+        if (!this.geoManager.init()) {
+            this.showMessage("Errore: Geolocalizzazione non supportata o permessi negati.");
+            // Potrebbe essere necessario gestire questo caso in modo più robusto
         }
-        
-        // Inizializza con zero
-        let latSum = 0, lonSum = 0, accSum = 0;
-        let totalWeight = 0;
-        
-        // Calcola la media pesata, dando più peso alle letture recenti e precise
-        filteredPositions.forEach((reading, index) => {
-            // Peso basato su recenza e precisione
-            const recencyWeight = Math.pow(this.historyWeight, index);
-            const accuracyWeight = 1 / (reading.accuracy + 1); // +1 per evitare divisione per zero
-            const weight = recencyWeight * accuracyWeight;
-            
-            totalWeight += weight;
-            latSum += reading.latitude * weight;
-            lonSum += reading.longitude * weight;
-            accSum += reading.accuracy * weight;
-        });
-        
-        // Normalizza
-        latSum /= totalWeight;
-        lonSum /= totalWeight;
-        accSum /= totalWeight;
-        
-        return {
-            latitude: latSum,
-            longitude: lonSum,
-            accuracy: accSum,
-            timestamp: Date.now()
-        };
+        await this.arManager.init();
+        this.storageManager.init();
+
+        // Inizializza i menu (aggiungono i loro listener)
+        this.menu1.init();
+        this.menu2.init();
+        this.menu3.init();
+        this.menu4.init();
+        this.debugUtil.init();
+
+        // Mostra il menu iniziale
+        this.showMenu1();
+
+        console.log("App inizializzata.");
+        this.log("Applicazione pronta.");
     }
 
     /**
-     * Avvia il monitoraggio continuo della posizione
+     * Mostra il Menu 1 (Principale)
      */
-    startPositionWatch() {
-        if (this.watchId !== null) return;
-        
-        console.log("Monitoraggio posizione attivo...");
-        
-        this.watchId = navigator.geolocation.watchPosition(
-            (position) => {
-                const rawPosition = {
-                    latitude: position.coords.latitude,
-                    longitude: position.coords.longitude,
-                    accuracy: position.coords.accuracy,
-                    timestamp: position.timestamp
-                };
-                
-                // Aggiungi alla cronologia
-                this.positionHistory.unshift(rawPosition);
-                if (this.positionHistory.length > this.maxHistoryLength) {
-                    this.positionHistory.pop();
-                }
-                
-                // Applica lo smussamento
-                this.currentPosition = this.calculateSmoothedPosition();
-            },
-            (error) => {
-                console.error("Errore durante il monitoraggio della posizione:", error);
-            },
-            {
-                enableHighAccuracy: true,
-                timeout: 10000,
-                maximumAge: 0
-            }
-        );
+    showMenu1() {
+        this.hideAllMenus();
+        this.menu1.show();
+        this.currentMenu = this.menu1;
+        this.arView.classList.remove('hidden');
+        this.mapView.classList.add('hidden');
+        this.log("Menu 1 visualizzato.");
     }
 
     /**
-     * Ferma il monitoraggio della posizione
+     * Mostra il Menu 2 (Piazzamento Oggetti)
      */
-    stopPositionWatch() {
-        if (this.watchId !== null) {
-            navigator.geolocation.clearWatch(this.watchId);
-            this.watchId = null;
-            console.log("Monitoraggio posizione fermato");
+    showMenu2() {
+        this.hideAllMenus();
+        this.menu2.show();
+        this.currentMenu = this.menu2;
+        this.arView.classList.remove('hidden');
+        this.mapView.classList.add('hidden');
+        this.log("Menu 2 visualizzato.");
+    }
+
+    /**
+     * Mostra il Menu 3 (Mappa)
+     */
+    showMenu3() {
+        this.hideAllMenus();
+        this.menu3.show();
+        this.currentMenu = this.menu3;
+        this.arView.classList.add('hidden');
+        this.mapView.classList.remove('hidden');
+        this.log("Menu 3 visualizzato.");
+        // Potrebbe essere necessario aggiornare la mappa qui
+        this.menu3.updateMap();
+    }
+
+    /**
+     * Mostra il Menu 4 (Esplora)
+     */
+    showMenu4() {
+        this.hideAllMenus();
+        this.menu4.show();
+        this.currentMenu = this.menu4;
+        this.arView.classList.remove('hidden');
+        this.mapView.classList.add('hidden');
+        this.log("Menu 4 visualizzato.");
+    }
+
+    /**
+     * Nasconde tutti i pannelli dei menu
+     */
+    hideAllMenus() {
+        if (this.currentMenu) {
+            this.currentMenu.hide();
+        }
+        // Assicurati che tutti i pannelli siano nascosti per sicurezza
+        document.querySelectorAll('.menu-panel').forEach(panel => panel.classList.add('hidden'));
+    }
+
+    /**
+     * Mostra il pannello di debug
+     */
+    showDebugPanel() {
+        this.debugUtil.show();
+    }
+
+    /**
+     * Registra un messaggio nel pannello di debug
+     * @param {string} message - Messaggio da registrare
+     */
+    log(message) {
+        if (this.debugUtil) {
+            this.debugUtil.log(message);
+        } else {
+            console.log("[DEBUG]", message); // Fallback se debugUtil non è pronto
         }
     }
 
     /**
-     * Calcola la distanza tra due punti GPS in metri usando la formula di Haversine
+     * Mostra un messaggio temporaneo all'utente (es. popup/toast)
+     * @param {string} message - Messaggio da mostrare
      */
-    calculateDistance(lat1, lon1, lat2, lon2) {
-        const R = 6371000; // Raggio della Terra in metri
-        const φ1 = lat1 * Math.PI / 180;
-        const φ2 = lat2 * Math.PI / 180;
-        const Δφ = (lat2 - lat1) * Math.PI / 180;
-        const Δλ = (lon2 - lon1) * Math.PI / 180;
-
-        const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
-                Math.cos(φ1) * Math.cos(φ2) *
-                Math.sin(Δλ/2) * Math.sin(Δλ/2);
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-        
-        return R * c; // Distanza in metri
+    showMessage(message) {
+        // Implementazione semplice con alert, da migliorare con un sistema di notifiche UI
+        alert(message);
+        this.log(`Messaggio utente: ${message}`);
     }
-    
-    /**
-     * Calcola la direzione in gradi da un punto a un altro (bearing)
-     * 0° = Nord, 90° = Est, 180° = Sud, 270° = Ovest
+}
+
+// Avvia l'applicazione quando il DOM è pronto
+document.addEventListener('DOMContentLoaded', () => {
+    const app = new App();
+    window.app = app; // Rendi l'app accessibile globalmente (per debug)
+    app.init().catch(error => {
+        console.error("Errore fatale durante l'inizializzazione:", error);
+        alert("Errore grave durante l'avvio dell'applicazione. Controlla la console per i dettagli.");
+    });
+});
