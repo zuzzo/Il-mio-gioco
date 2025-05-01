@@ -20,7 +20,7 @@ class Menu2 {
         this.imageAnchorToggle = document.getElementById('image-anchor-toggle2');
         
         // Stato
-        this.selectedModelPath = this.objectSelect ? this.objectSelect.value : 'assets/models/treasure.glb';
+        this.selectedModelPath = this.objectSelect ? this.objectSelect.value : '';
         this.customModelUrl = null;
         this.objectScale = 1.0;
         this.objectRotation = 0;
@@ -49,6 +49,12 @@ class Menu2 {
         this.backBtn.addEventListener('click', this.onBackClick);
         this.debugBtn.addEventListener('click', this.onDebugClick);
         this.imageAnchorToggle.addEventListener('change', this.onImageAnchorToggle);
+        
+        // Imposta il modello iniziale
+        if (this.objectSelect && this.objectSelect.options.length > 0) {
+            this.selectedModelPath = this.objectSelect.value;
+            this.onObjectSelectChange();
+        }
     }
     
     /**
@@ -98,7 +104,7 @@ class Menu2 {
         this.selectedModelPath = this.objectSelect.value;
         
         // Mostra/nascondi l'input file per modelli personalizzati
-        if (this.selectedModelPath === 'assets/models/custom.glb') {
+        if (this.selectedModelPath === 'custom') {
             this.fileUploadDiv.classList.remove('hidden');
         } else {
             this.fileUploadDiv.classList.add('hidden');
@@ -147,12 +153,12 @@ class Menu2 {
     updatePreview() {
         // Determina quale modello usare
         let modelToUse = this.selectedModelPath;
-        if (this.selectedModelPath === 'assets/models/custom.glb' && this.customModelUrl) {
+        if (this.selectedModelPath === 'custom' && this.customModelUrl) {
             modelToUse = this.customModelUrl;
         }
         
         // Aggiorna la preview nell'AR manager
-        if (this.app.arManager) {
+        if (this.app.arManager && modelToUse) {
             this.app.arManager.updatePreviewObject(modelToUse, this.objectScale, this.objectRotation);
         }
     }
@@ -171,14 +177,14 @@ class Menu2 {
         let modelToUse = this.selectedModelPath;
         let modelName = this.getModelName();
         
-        if (this.selectedModelPath === 'assets/models/custom.glb' && this.customModelUrl) {
+        if (this.selectedModelPath === 'custom' && this.customModelUrl) {
             modelToUse = this.customModelUrl;
         }
         
         // Crea l'oggetto da salvare
         const object = {
             modelPath: this.selectedModelPath,
-            isCustomModel: this.selectedModelPath === 'assets/models/custom.glb',
+            isCustomModel: this.selectedModelPath === 'custom',
             position: {...this.app.geoManager.currentPosition},
             orientation: this.app.geoManager.currentOrientation ? 
                 {...this.app.geoManager.currentOrientation} : null,
@@ -229,20 +235,20 @@ class Menu2 {
      * Ottiene un nome leggibile per il modello
      */
     getModelName() {
-        if (this.selectedModelPath === 'assets/models/custom.glb' && this.customModelInput.files[0]) {
+        // Se è un modello personalizzato
+        if (this.selectedModelPath === 'custom' && this.customModelInput.files[0]) {
             return this.customModelInput.files[0].name.replace('.glb', '').replace('.gltf', '');
         }
         
-        switch (this.selectedModelPath) {
-            case 'assets/models/treasure.glb':
-                return 'Tesoro';
-            case 'assets/models/cube.glb':
-                return 'Cubo';
-            case 'assets/models/sphere.glb':
-                return 'Sfera';
-            default:
-                return 'Oggetto';
+        // Cerca nei modelli disponibili
+        const selectedModel = window.availableModels.find(model => model.path === this.selectedModelPath);
+        
+        if (selectedModel) {
+            return selectedModel.name;
         }
+        
+        // Fallback
+        return 'Oggetto';
     }
 }
 

@@ -69,10 +69,7 @@
             
             <div class="buttons-container">
                 <select id="object-select" class="object-dropdown">
-                    <option value="assets/models/treasure.glb">Seleziona Oggetto</option>
-                    <option value="assets/models/cube.glb">Cubo</option>
-                    <option value="assets/models/sphere.glb">Sfera</option>
-                    <option value="assets/models/custom.glb">Personalizzato...</option>
+                    <!-- Il menu verrà popolato dinamicamente -->
                 </select>
                 <div class="file-upload hidden">
                     <input type="file" id="custom-model-input" accept=".glb,.gltf">
@@ -145,6 +142,15 @@
             </div>
         </div>
     </div>
+    
+    <!-- Configurazione modelli -->
+    <script>
+        // Configurazione dei modelli disponibili
+        window.availableModels = [
+            // Questo array sarà popolato dinamicamente dal file models-config.js
+        ];
+    </script>
+    <script src="js/models-config.js"></script>
     
     <!-- Manager -->
     <script src="js/managers/geo-manager.js"></script>
