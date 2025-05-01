@@ -16,86 +16,113 @@
             <canvas id="render-canvas"></canvas>
         </div>
         
-        <div class="control-panel">
-            <div class="slider vertical" id="distance-slider">
-                <input type="range" min="1" max="10" value="5" id="distance-input">
-                <span id="distance-value">5m</span>
+        <div id="map-view" class="hidden">
+            <div id="map-container"></div>
+        </div>
+        
+        <!-- Menu 1: Principale -->
+        <div id="menu1" class="menu-panel">
+            <div class="button-group">
+                <button id="place-object-btn" class="menu-btn">Piazza oggetto</button>
+                <button id="map-btn" class="menu-btn">Mappa</button>
+                <button id="explore-btn" class="menu-btn">Esplora</button>
             </div>
             
-            <div class="slider horizontal" id="rotation-slider">
-                <input type="range" min="0" max="360" value="0" id="rotation-input">
-                <span id="rotation-value">0°</span>
+            <div class="option-group">
+                <label class="toggle-option">
+                    <input type="checkbox" id="image-anchor-toggle">
+                    <span class="toggle-label">Ancoraggio immagini</span>
+                </label>
             </div>
             
             <div class="button-group">
-                <button id="confirm-btn" class="primary">Conferma</button>
-                <button id="cancel-btn" class="secondary">Annulla</button>
+                <button id="debug-btn" class="utility-btn">Debug</button>
+            </div>
+        </div>
+        
+        <!-- Menu 2: Piazzamento oggetti -->
+        <div id="menu2" class="menu-panel hidden">
+            <div class="selection-group">
+                <select id="object-select" class="dropdown">
+                    <option value="assets/models/treasure.glb">Tesoro</option>
+                    <option value="assets/models/cube.glb">Cubo</option>
+                    <option value="assets/models/sphere.glb">Sfera</option>
+                    <option value="assets/models/custom.glb">Personalizzato...</option>
+                </select>
+                
+                <div class="file-upload hidden">
+                    <input type="file" id="custom-model-input" accept=".glb,.gltf">
+                </div>
+            </div>
+            
+            <div class="slider-group">
+                <div class="slider-container">
+                    <label for="scale-slider">Dimensione:</label>
+                    <input type="range" min="0.1" max="2" step="0.1" value="1" id="scale-slider" class="horizontal-slider">
+                    <span id="scale-value">1.0</span>
+                </div>
+                
+                <div class="slider-container">
+                    <label for="rotation-slider">Rotazione:</label>
+                    <input type="range" min="0" max="360" value="0" id="rotation-slider" class="horizontal-slider">
+                    <span id="rotation-value">0°</span>
+                </div>
+            </div>
+            
+            <div class="button-group">
+                <button id="confirm-place-btn" class="action-btn">Piazza oggetto</button>
+                <button id="back-menu1-btn" class="back-btn">Indietro</button>
+            </div>
+        </div>
+        
+        <!-- Menu 3: Mappa -->
+        <div id="menu3" class="menu-panel hidden">
+            <div class="map-controls">
+                <button id="center-map-btn" class="map-btn">Centra su di me</button>
+                <button id="zoom-in-btn" class="map-btn">+</button>
+                <button id="zoom-out-btn" class="map-btn">-</button>
+            </div>
+            
+            <div class="button-group">
+                <button id="back-menu1-from-map-btn" class="back-btn">Indietro</button>
+            </div>
+        </div>
+        
+        <!-- Menu 4: Esplora -->
+        <div id="menu4" class="menu-panel hidden">
+            <div class="explore-list" id="object-list">
+                <!-- Gli oggetti saranno inseriti qui dinamicamente -->
+            </div>
+            
+            <div class="button-group">
+                <button id="back-menu1-from-explore-btn" class="back-btn">Indietro</button>
+            </div>
+        </div>
+        
+        <!-- Pannello di Debug -->
+        <div id="debug-panel" class="debug-overlay hidden">
+            <h3>Debug</h3>
+            <div id="debug-content" class="debug-info"></div>
+            <div class="debug-actions">
+                <button id="copy-debug-btn">Copia</button>
+                <button id="close-debug-btn">Chiudi</button>
             </div>
         </div>
     </div>
     
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            // Inizializzazione
-            const cameraFeed = document.getElementById('camera-feed');
-            const canvas = document.getElementById('render-canvas');
-            const engine = new BABYLON.Engine(canvas, true);
-            const scene = new BABYLON.Scene(engine);
-            const camera = new BABYLON.ArcRotateCamera("Camera", 0, 0, 0, BABYLON.Vector3.Zero(), scene);
-            
-            // Configurazione fotocamera
-            navigator.mediaDevices.getUserMedia({ 
-                video: { 
-                    facingMode: 'environment',
-                    width: { ideal: 1920 },
-                    height: { ideal: 1080 }
-                } 
-            })
-            .then(stream => {
-                cameraFeed.srcObject = stream;
-                cameraFeed.play();
-            })
-            .catch(err => {
-                console.error("Errore fotocamera:", err);
-                alert("Errore nell'accesso alla fotocamera. Verifica i permessi.");
-            });
-            
-            // Gestione controlli
-            document.getElementById('distance-input').addEventListener('input', updateDistance);
-            document.getElementById('rotation-input').addEventListener('input', updateRotation);
-            document.getElementById('confirm-btn').addEventListener('click', confirmPlacement);
-            document.getElementById('cancel-btn').addEventListener('click', cancelPlacement);
-            
-            function updateDistance() {
-                const value = document.getElementById('distance-input').value;
-                document.getElementById('distance-value').textContent = value + 'm';
-                // Aggiorna la posizione dell'oggetto
-            }
-            
-            function updateRotation() {
-                const value = document.getElementById('rotation-input').value;
-                document.getElementById('rotation-value').textContent = value + '°';
-                // Aggiorna la rotazione dell'oggetto
-            }
-            
-            function confirmPlacement() {
-                // Logica per confermare il posizionamento
-                alert("Oggetto posizionato con successo!");
-            }
-            
-            function cancelPlacement() {
-                // Logica per annullare il posizionamento
-                alert("Posizionamento annullato");
-            }
-            
-            engine.runRenderLoop(() => {
-                scene.render();
-            });
-            
-            window.addEventListener('resize', () => {
-                engine.resize();
-            });
-        });
-    </script>
+    <!-- Manager -->
+    <script src="geo-manager.js"></script>
+    <script src="ar-manager.js"></script>
+    <script src="storage-manager.js"></script>
+    
+    <!-- Menu Scripts -->
+    <script src="menu1.js"></script>
+    <script src="menu2.js"></script>
+    <script src="menu3.js"></script>
+    <script src="menu4.js"></script>
+    <script src="debug.js"></script>
+    
+    <!-- Main App -->
+    <script src="app.js"></script>
 </body>
 </html>
