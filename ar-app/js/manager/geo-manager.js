@@ -4,9 +4,7 @@
 class GeoManager {
     constructor() {
         this.currentPosition = null;
-        this.savedPosition = null;
         this.currentOrientation = null;
-        this.savedOrientation = null;
         this.watchId = null;
         this.isListeningOrientation = false;
         
@@ -22,7 +20,7 @@ class GeoManager {
      */
     init() {
         if (!navigator.geolocation) {
-            this.updateStatus("Il tuo browser non supporta la geolocalizzazione.");
+            console.error("Il browser non supporta la geolocalizzazione");
             return false;
         }
         
@@ -30,8 +28,11 @@ class GeoManager {
         if (window.DeviceOrientationEvent) {
             this.startOrientationTracking();
         } else {
-            this.updateStatus("Attenzione: il tuo dispositivo non supporta la rilevazione dell'orientamento.");
+            console.warn("Il dispositivo non supporta la rilevazione dell'orientamento");
         }
+        
+        // Avvia il monitoraggio della posizione
+        this.startPositionWatch();
         
         return true;
     }
@@ -42,16 +43,16 @@ class GeoManager {
     startOrientationTracking() {
         if (this.isListeningOrientation) return;
 
-        // Prima verifichiamo se è necessaria un'autorizzazione (iOS 13+)
+        // Verifichiamo se è necessaria un'autorizzazione (iOS 13+)
         if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-            this.updateStatus("Richiesta permesso per l'orientamento...");
+            console.log("Richiesta permesso per l'orientamento...");
 
             DeviceOrientationEvent.requestPermission()
                 .then(permissionState => {
                     if (permissionState === 'granted') {
                         this.addOrientationListener();
                     } else {
-                        this.updateStatus("Permesso per l'orientamento negato.");
+                        console.warn("Permesso per l'orientamento negato");
                     }
                 })
                 .catch(error => {
@@ -71,6 +72,7 @@ class GeoManager {
     addOrientationListener() {
         window.addEventListener('deviceorientation', this.handleOrientation.bind(this));
         this.isListeningOrientation = true;
+        console.log("Monitoraggio orientamento avviato");
     }
 
     /**
@@ -154,7 +156,7 @@ class GeoManager {
      */
     getCurrentPosition() {
         return new Promise((resolve, reject) => {
-            this.updateStatus("Ottenimento della posizione...");
+            console.log("Ottenimento della posizione...");
             
             navigator.geolocation.getCurrentPosition(
                 (position) => {
@@ -174,10 +176,7 @@ class GeoManager {
                     // Calcola la posizione smussata
                     this.currentPosition = this.calculateSmoothedPosition();
                     
-                    // Non mostriamo più le coordinate nell'UI
-                    // this.updateCoordinates(this.currentPosition);
-                    
-                    this.updateStatus("Posizione ottenuta con successo!");
+                    console.log("Posizione ottenuta con successo!");
                     resolve(this.currentPosition);
                 },
                 (error) => {
@@ -195,7 +194,7 @@ class GeoManager {
                         default:
                             errorMessage = "Errore sconosciuto nella geolocalizzazione.";
                     }
-                    this.updateStatus(errorMessage);
+                    console.error(errorMessage);
                     reject(errorMessage);
                 },
                 {
@@ -267,7 +266,7 @@ class GeoManager {
     startPositionWatch() {
         if (this.watchId !== null) return;
         
-        this.updateStatus("Monitoraggio posizione attivo...");
+        console.log("Monitoraggio posizione attivo...");
         
         this.watchId = navigator.geolocation.watchPosition(
             (position) => {
@@ -278,12 +277,6 @@ class GeoManager {
                     timestamp: position.timestamp
                 };
                 
-                // Log per debug
-                console.log("Posizione ricevuta:", 
-                    rawPosition.latitude.toFixed(6), 
-                    rawPosition.longitude.toFixed(6), 
-                    "acc:", rawPosition.accuracy.toFixed(1));
-                
                 // Aggiungi alla cronologia
                 this.positionHistory.unshift(rawPosition);
                 if (this.positionHistory.length > this.maxHistoryLength) {
@@ -292,41 +285,9 @@ class GeoManager {
                 
                 // Applica lo smussamento
                 this.currentPosition = this.calculateSmoothedPosition();
-                
-                // Non mostriamo più le coordinate nell'UI
-                // this.updateCoordinates(this.currentPosition);
-                
-                if (this.savedPosition) {
-                    const distance = this.calculateDistance(
-                        this.currentPosition.latitude,
-                        this.currentPosition.longitude,
-                        this.savedPosition.latitude,
-                        this.savedPosition.longitude
-                    );
-                    this.updateDistance(distance);
-                    
-                    // Calcolare la direzione verso l'oggetto posizionato
-                    if (this.savedOrientation) {
-                        const bearing = this.calculateBearing(
-                            this.currentPosition.latitude,
-                            this.currentPosition.longitude,
-                            this.savedPosition.latitude,
-                            this.savedPosition.longitude
-                        );
-                        
-                        // Calcola la differenza tra la direzione della bussola e la direzione verso l'oggetto
-                        // Questo può essere usato per guidare l'utente verso l'oggetto
-                        const headingDifference = this.currentOrientation ? 
-                            (bearing - this.currentOrientation.alpha + 360) % 360 : 0;
-                            
-                        // Aggiorniamo l'UI con la direzione
-                        this.updateDirection(bearing, headingDifference);
-                    }
-                }
             },
             (error) => {
-                this.updateStatus("Errore durante il monitoraggio della posizione.");
-                console.error("Errore di geolocalizzazione:", error);
+                console.error("Errore durante il monitoraggio della posizione:", error);
             },
             {
                 enableHighAccuracy: true,
@@ -343,45 +304,8 @@ class GeoManager {
         if (this.watchId !== null) {
             navigator.geolocation.clearWatch(this.watchId);
             this.watchId = null;
-            this.updateStatus("Monitoraggio posizione fermato");
+            console.log("Monitoraggio posizione fermato");
         }
-    }
-
-    /**
-     * Salva la posizione e l'orientamento correnti
-     */
-    saveCurrentPositionAndOrientation() {
-        if (this.currentPosition) {
-            // Salviamo la posizione corrente senza lo smussamento
-            // per avere un punto di riferimento preciso
-            this.savedPosition = {...this.currentPosition};
-            
-            if (this.currentOrientation) {
-                this.savedOrientation = {...this.currentOrientation};
-                this.updateStatus(
-                    `Oggetto posizionato con direzione: ${this.savedOrientation.alpha.toFixed(1)}°`
-                );
-                
-                // Log per debugging
-                console.log(
-                    `Oggetto salvato a: ${this.savedPosition.latitude.toFixed(6)}, ${this.savedPosition.longitude.toFixed(6)} ` +
-                    `con direzione: ${this.savedOrientation.alpha.toFixed(1)}°`
-                );
-            } else {
-                this.updateStatus("Oggetto posizionato (orientamento non disponibile)");
-                
-                console.log(
-                    `Oggetto salvato a: ${this.savedPosition.latitude.toFixed(6)}, ${this.savedPosition.longitude.toFixed(6)} ` +
-                    `(orientamento non disponibile)`
-                );
-            }
-            
-            return {
-                position: this.savedPosition,
-                orientation: this.savedOrientation
-            };
-        }
-        return null;
     }
 
     /**
@@ -405,6 +329,11 @@ class GeoManager {
     /**
      * Calcola la direzione in gradi da un punto a un altro (bearing)
      * 0° = Nord, 90° = Est, 180° = Sud, 270° = Ovest
+     * @param {number} lat1 - Latitudine punto di partenza
+     * @param {number} lon1 - Longitudine punto di partenza
+     * @param {number} lat2 - Latitudine punto di destinazione
+     * @param {number} lon2 - Longitudine punto di destinazione
+     * @returns {number} Direzione in gradi
      */
     calculateBearing(lat1, lon1, lat2, lon2) {
         const φ1 = lat1 * Math.PI / 180;
@@ -420,38 +349,34 @@ class GeoManager {
         
         return bearing;
     }
-
+    
     /**
-     * Aggiorna lo stato visualizzato
+     * Calcola la distanza in metri tra due latitudini
+     * @param {number} lat1 - Latitudine punto 1
+     * @param {number} lat2 - Latitudine punto 2
+     * @returns {number} Distanza in metri
      */
-    updateStatus(message) {
-        const statusElement = document.getElementById('statusMessage');
-        if (statusElement) {
-            statusElement.textContent = message;
-        }
-        console.log("GEO Status:", message);
-    }
-
-    /**
-     * Aggiorna la distanza visualizzata
-     */
-    updateDistance(distance) {
-        const distElement = document.getElementById('distance');
-        if (distElement) {
-            distElement.textContent = `Distanza: ${distance.toFixed(1)} m`;
-            distElement.classList.remove('hidden');
-        }
+    calculateLatitudeDistance(lat1, lat2) {
+        const R = 6371000; // Raggio della Terra in metri
+        const φ1 = lat1 * Math.PI / 180;
+        const φ2 = lat2 * Math.PI / 180;
+        
+        return R * (φ2 - φ1);
     }
     
     /**
-     * Aggiorna la direzione visualizzata
+     * Calcola la distanza in metri tra due longitudini
+     * @param {number} lon1 - Longitudine punto 1
+     * @param {number} lon2 - Longitudine punto 2
+     * @param {number} lat - Latitudine del punto (necessaria per il calcolo)
+     * @returns {number} Distanza in metri
      */
-    updateDirection(bearing, headingDifference) {
-        const dirElement = document.getElementById('direction');
-        if (dirElement) {
-            dirElement.textContent = `Direzione: ${bearing.toFixed(1)}°`;
-            dirElement.classList.remove('hidden');
-        }
+    calculateLongitudeDistance(lon1, lon2, lat) {
+        const R = 6371000; // Raggio della Terra in metri
+        const φ = lat * Math.PI / 180; // Latitudine in radianti
+        const Δλ = (lon2 - lon1) * Math.PI / 180;
+        
+        return R * Math.cos(φ) * Δλ;
     }
 }
 

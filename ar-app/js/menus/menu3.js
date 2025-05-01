@@ -8,42 +8,52 @@ class Menu3 {
         
         // Elementi UI
         this.mapContainer = document.getElementById('map-container');
+        this.selectedObjectName = document.getElementById('selected-object-name');
         this.centerMapBtn = document.getElementById('center-map-btn');
         this.zoomInBtn = document.getElementById('zoom-in-btn');
         this.zoomOutBtn = document.getElementById('zoom-out-btn');
+        this.deleteObjectBtn = document.getElementById('delete-object-btn');
+        this.drawAreaBtn = document.getElementById('draw-area-btn');
         this.backBtn = document.getElementById('back-menu1-from-map-btn');
         
         // Stato mappa
         this.map = null;
         this.markers = [];
         this.userMarker = null;
-        this.userPositionCircle = null;
+        this.selectedObjectId = null;
         this.mapInitialized = false;
         
         // Bind dei metodi
         this.onCenterMapClick = this.onCenterMapClick.bind(this);
         this.onZoomInClick = this.onZoomInClick.bind(this);
         this.onZoomOutClick = this.onZoomOutClick.bind(this);
+        this.onDeleteObjectClick = this.onDeleteObjectClick.bind(this);
+        this.onDrawAreaClick = this.onDrawAreaClick.bind(this);
         this.onBackClick = this.onBackClick.bind(this);
         this.updateMap = this.updateMap.bind(this);
     }
     
     /**
-     * Inizializza la pagina
+     * Inizializza il menu
      */
     init() {
-        // Aggiunge gli event listener
+        // Aggiungi event listeners
         this.centerMapBtn.addEventListener('click', this.onCenterMapClick);
         this.zoomInBtn.addEventListener('click', this.onZoomInClick);
         this.zoomOutBtn.addEventListener('click', this.onZoomOutClick);
+        this.deleteObjectBtn.addEventListener('click', this.onDeleteObjectClick);
+        this.drawAreaBtn.addEventListener('click', this.onDrawAreaClick);
         this.backBtn.addEventListener('click', this.onBackClick);
     }
     
     /**
-     * Mostra questa pagina
+     * Mostra questo menu
      */
     show() {
+        // Mostra il menu
         this.menuElement.classList.remove('hidden');
+        
+        // Mostra la vista mappa
         document.getElementById('ar-view').classList.add('hidden');
         document.getElementById('map-view').classList.remove('hidden');
         
@@ -57,7 +67,7 @@ class Menu3 {
     }
     
     /**
-     * Nasconde questa pagina
+     * Nasconde questo menu
      */
     hide() {
         this.menuElement.classList.add('hidden');
@@ -76,16 +86,13 @@ class Menu3 {
             }
             
             // Crea un semplice renderer canvas per la mappa
-            // Questa è una versione semplificata, in un'applicazione reale 
-            // si utilizzerebbe una libreria come Leaflet o Google Maps
-            
-            // Creiamo un canvas per disegnare la mappa
             const canvas = document.createElement('canvas');
             canvas.width = this.mapContainer.clientWidth;
             canvas.height = this.mapContainer.clientHeight;
             this.mapContainer.innerHTML = '';
             this.mapContainer.appendChild(canvas);
             
+            // Configura il contesto 2D
             const ctx = canvas.getContext('2d');
             
             // Setta lo stato della mappa
@@ -100,6 +107,11 @@ class Menu3 {
                 objects: []
             };
             
+            // Aggiungi un event listener per il click sulla mappa
+            canvas.addEventListener('click', (event) => {
+                this.handleMapClick(event);
+            });
+            
             // Segnala che la mappa è inizializzata
             this.mapInitialized = true;
             
@@ -110,10 +122,91 @@ class Menu3 {
             window.addEventListener('resize', () => {
                 this.resizeMap();
             });
+            
+            this.app.log("Mappa inizializzata");
         } catch (error) {
             console.error("Errore nell'inizializzazione della mappa:", error);
             this.app.log("Errore mappa: " + error.message);
         }
+    }
+    
+    /**
+     * Gestisce il click sulla mappa
+     */
+    handleMapClick(event) {
+        if (!this.map) return;
+        
+        const canvas = this.map.canvas;
+        const rect = canvas.getBoundingClientRect();
+        const x = event.clientX - rect.left;
+        const y = event.clientY - rect.top;
+        
+        // Ottieni la posizione corrente
+        const currentPosition = this.app.geoManager.currentPosition;
+        if (!currentPosition) return;
+        
+        // Ottieni tutti gli oggetti salvati
+        const objects = this.app.storageManager.getAllObjects();
+        
+        // Calcola il centro della mappa
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+        
+        // Controlla se il click è su un oggetto
+        for (const obj of objects) {
+            // Calcola la posizione relativa sulla mappa
+            const dx = this.calculateLongitudeDistance(
+                currentPosition.longitude, 
+                obj.position.longitude, 
+                currentPosition.latitude
+            );
+            
+            const dy = this.calculateLatitudeDistance(
+                currentPosition.latitude, 
+                obj.position.latitude
+            );
+            
+            // Converti in pixel
+            const pixelX = centerX + (dx / this.map.zoom);
+            const pixelY = centerY - (dy / this.map.zoom); // Invertito perché l'asse Y è invertito nel canvas
+            
+            // Verifica se il click è sull'oggetto (entro un raggio di 15 pixel)
+            const distance = Math.sqrt(Math.pow(x - pixelX, 2) + Math.pow(y - pixelY, 2));
+            
+            if (distance <= 15) {
+                this.selectObject(obj);
+                return;
+            }
+        }
+        
+        // Se il click non è su nessun oggetto, deseleziona
+        this.deselectObject();
+    }
+    
+    /**
+     * Seleziona un oggetto
+     */
+    selectObject(object) {
+        this.selectedObjectId = object.id;
+        this.selectedObjectName.textContent = object.name || 'Oggetto selezionato';
+        this.deleteObjectBtn.disabled = false;
+        
+        this.app.log(`Oggetto selezionato: ${object.name || 'Oggetto'} (ID: ${object.id})`);
+        
+        // Ridisegna la mappa per evidenziare l'oggetto selezionato
+        this.updateMap();
+    }
+    
+    /**
+     * Deseleziona l'oggetto corrente
+     */
+    deselectObject() {
+        this.selectedObjectId = null;
+        this.selectedObjectName.textContent = 'Nessun oggetto selezionato';
+        this.deleteObjectBtn.disabled = true;
+        
+        // Ridisegna la mappa
+        this.updateMap();
     }
     
     /**
@@ -129,11 +222,11 @@ class Menu3 {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         
         // Disegna lo sfondo della mappa
-        ctx.fillStyle = '#f0f0f0';
+        ctx.fillStyle = '#e8f4ea';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         
         // Disegna una griglia semplice
-        ctx.strokeStyle = '#ddd';
+        ctx.strokeStyle = '#c0d6c9';
         ctx.lineWidth = 1;
         
         const gridSize = 20;
@@ -152,163 +245,3 @@ class Menu3 {
         }
         
         // Ottieni tutti gli oggetti salvati
-        const objects = this.app.storageManager.getAllObjects();
-        
-        // Ottieni la posizione corrente
-        const currentPosition = this.app.geoManager.currentPosition;
-        
-        if (currentPosition) {
-            // Disegna il punto della posizione corrente
-            const centerX = canvas.width / 2;
-            const centerY = canvas.height / 2;
-            
-            // Disegna un cerchio per la precisione
-            const accuracyRadius = currentPosition.accuracy / this.map.zoom;
-            ctx.beginPath();
-            ctx.arc(centerX, centerY, accuracyRadius, 0, 2 * Math.PI);
-            ctx.fillStyle = 'rgba(0, 120, 255, 0.2)';
-            ctx.fill();
-            
-            // Disegna il marker dell'utente
-            ctx.beginPath();
-            ctx.arc(centerX, centerY, 8, 0, 2 * Math.PI);
-            ctx.fillStyle = '#0078FF';
-            ctx.fill();
-            ctx.strokeStyle = 'white';
-            ctx.lineWidth = 2;
-            ctx.stroke();
-            
-            // Disegna tutti gli oggetti
-            for (const obj of objects) {
-                // Calcola la posizione relativa sulla mappa
-                const dx = this.calculateLongitudeDistance(
-                    currentPosition.longitude, 
-                    obj.position.longitude, 
-                    currentPosition.latitude
-                );
-                
-                const dy = this.calculateLatitudeDistance(
-                    currentPosition.latitude, 
-                    obj.position.latitude
-                );
-                
-                // Converti in pixel
-                const pixelX = centerX + (dx / this.map.zoom);
-                const pixelY = centerY - (dy / this.map.zoom); // Invertito perché l'asse Y è invertito nel canvas
-                
-                // Disegna il marker dell'oggetto
-                ctx.beginPath();
-                ctx.arc(pixelX, pixelY, 6, 0, 2 * Math.PI);
-                ctx.fillStyle = '#F44336';
-                ctx.fill();
-                ctx.strokeStyle = 'white';
-                ctx.lineWidth = 2;
-                ctx.stroke();
-                
-                // Disegna il nome dell'oggetto
-                ctx.fillStyle = '#333';
-                ctx.font = '12px Arial';
-                ctx.textAlign = 'center';
-                ctx.fillText(obj.name || 'Oggetto', pixelX, pixelY - 10);
-            }
-        } else {
-            // Posizione non disponibile
-            ctx.fillStyle = '#333';
-            ctx.font = '16px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText('Posizione non disponibile', canvas.width / 2, canvas.height / 2);
-        }
-    }
-    
-    /**
-     * Calcola la distanza in metri tra due longitudini
-     */
-    calculateLongitudeDistance(lon1, lon2, lat) {
-        const R = 6371000; // Raggio della Terra in metri
-        const φ = lat * Math.PI / 180; // Latitudine in radianti
-        const Δλ = (lon2 - lon1) * Math.PI / 180;
-        
-        return R * Math.cos(φ) * Δλ;
-    }
-    
-    /**
-     * Calcola la distanza in metri tra due latitudini
-     */
-    calculateLatitudeDistance(lat1, lat2) {
-        const R = 6371000; // Raggio della Terra in metri
-        const φ1 = lat1 * Math.PI / 180;
-        const φ2 = lat2 * Math.PI / 180;
-        
-        return R * (φ2 - φ1);
-    }
-    
-    /**
-     * Gestisce il ridimensionamento della mappa
-     */
-    resizeMap() {
-        if (!this.map) return;
-        
-        // Aggiorna le dimensioni del canvas
-        this.map.canvas.width = this.mapContainer.clientWidth;
-        this.map.canvas.height = this.mapContainer.clientHeight;
-        
-        // Ridisegna la mappa
-        this.updateMap();
-    }
-    
-    /**
-     * Gestisce il click sul pulsante centra mappa
-     */
-    onCenterMapClick() {
-        if (!this.map) return;
-        
-        // Aggiorna il centro della mappa con la posizione corrente
-        const position = this.app.geoManager.currentPosition;
-        if (position) {
-            this.map.center = {
-                latitude: position.latitude,
-                longitude: position.longitude
-            };
-            
-            // Aggiorna la mappa
-            this.updateMap();
-        }
-    }
-    
-    /**
-     * Gestisce il click sul pulsante zoom in
-     */
-    onZoomInClick() {
-        if (!this.map) return;
-        
-        // Aumenta il livello di zoom (riduce metri per pixel)
-        this.map.zoom *= 1.5;
-        
-        // Aggiorna la mappa
-        this.updateMap();
-    }
-    
-    /**
-     * Gestisce il click sul pulsante zoom out
-     */
-    onZoomOutClick() {
-        if (!this.map) return;
-        
-        // Diminuisce il livello di zoom (aumenta metri per pixel)
-        this.map.zoom /= 1.5;
-        
-        // Aggiorna la mappa
-        this.updateMap();
-    }
-    
-    /**
-     * Gestisce il click sul pulsante indietro
-     */
-    onBackClick() {
-        this.hide();
-        this.app.showMenu1();
-    }
-}
-
-// Esporta la classe
-window.Menu3 = Menu3;

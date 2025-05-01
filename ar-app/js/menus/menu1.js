@@ -6,82 +6,90 @@ class Menu1 {
         this.app = app;
         this.menuElement = document.getElementById('menu1');
         
-        // Pulsanti
-        this.placeObjectBtn = document.getElementById('place-object-btn');
+        // Elementi UI
+        this.placeBtn = document.getElementById('place-btn');
         this.mapBtn = document.getElementById('map-btn');
         this.exploreBtn = document.getElementById('explore-btn');
         this.debugBtn = document.getElementById('debug-btn');
-        
-        // Opzioni
         this.imageAnchorToggle = document.getElementById('image-anchor-toggle');
         
         // Bind dei metodi
-        this.onPlaceObjectClick = this.onPlaceObjectClick.bind(this);
-        this.onMapClick = this.onMapClick.bind(this);
-        this.onExploreClick = this.onExploreClick.bind(this);
-        this.onDebugClick = this.onDebugClick.bind(this);
+        this.onPlaceBtnClick = this.onPlaceBtnClick.bind(this);
+        this.onMapBtnClick = this.onMapBtnClick.bind(this);
+        this.onExploreBtnClick = this.onExploreBtnClick.bind(this);
+        this.onDebugBtnClick = this.onDebugBtnClick.bind(this);
         this.onImageAnchorToggle = this.onImageAnchorToggle.bind(this);
     }
     
     /**
-     * Inizializza la pagina
+     * Inizializza il menu
      */
     init() {
-        // Aggiunge gli event listener
-        this.placeObjectBtn.addEventListener('click', this.onPlaceObjectClick);
-        this.mapBtn.addEventListener('click', this.onMapClick);
-        this.exploreBtn.addEventListener('click', this.onExploreClick);
-        this.debugBtn.addEventListener('click', this.onDebugClick);
+        // Aggiungi event listeners
+        this.placeBtn.addEventListener('click', this.onPlaceBtnClick);
+        this.mapBtn.addEventListener('click', this.onMapBtnClick);
+        this.exploreBtn.addEventListener('click', this.onExploreBtnClick);
+        this.debugBtn.addEventListener('click', this.onDebugBtnClick);
         this.imageAnchorToggle.addEventListener('change', this.onImageAnchorToggle);
         
-        // Stato iniziale
-        this.imageAnchorToggle.checked = this.app.isImageAnchorEnabled;
+        // Imposta lo stato iniziale del toggle
+        this.imageAnchorToggle.checked = this.app.arManager.imageAnchorEnabled;
     }
     
     /**
-     * Mostra questa pagina
+     * Mostra questo menu
      */
     show() {
+        // Mostra il menu
         this.menuElement.classList.remove('hidden');
+        
+        // Mostra la vista AR
         document.getElementById('ar-view').classList.remove('hidden');
         document.getElementById('map-view').classList.add('hidden');
+        
+        // Aggiorna lo stato del toggle
+        this.imageAnchorToggle.checked = this.app.arManager.imageAnchorEnabled;
     }
     
     /**
-     * Nasconde questa pagina
+     * Nasconde questo menu
      */
     hide() {
         this.menuElement.classList.add('hidden');
     }
     
     /**
-     * Gestisce il click sul pulsante Piazza oggetto
+     * Gestisce il click sul pulsante "Piazza oggetti"
      */
-    onPlaceObjectClick() {
+    onPlaceBtnClick() {
+        this.app.log("Passaggio a Menu 2 (Piazza oggetti)");
         this.hide();
         this.app.showMenu2();
     }
     
     /**
-     * Gestisce il click sul pulsante Mappa
+     * Gestisce il click sul pulsante "Mappa"
      */
-    onMapClick() {
+    onMapBtnClick() {
+        this.app.log("Passaggio a Menu 3 (Mappa)");
         this.hide();
         this.app.showMenu3();
     }
     
     /**
-     * Gestisce il click sul pulsante Esplora
+     * Gestisce il click sul pulsante "Esplora"
      */
-    onExploreClick() {
+    onExploreBtnClick() {
+        this.app.log("Passaggio a Menu 4 (Esplora)");
         this.hide();
         this.app.showMenu4();
     }
     
     /**
-     * Gestisce il click sul pulsante Debug
+     * Gestisce il click sul pulsante "Debug"
      */
-    onDebugClick() {
+    onDebugBtnClick() {
+        this.app.log("Apertura pannello Debug");
         this.app.showDebugPanel();
     }
     
@@ -89,8 +97,9 @@ class Menu1 {
      * Gestisce il toggle per l'ancoraggio delle immagini
      */
     onImageAnchorToggle(event) {
-        this.app.isImageAnchorEnabled = event.target.checked;
-        this.app.log("Ancoraggio immagini: " + (this.app.isImageAnchorEnabled ? "attivato" : "disattivato"));
+        const enabled = event.target.checked;
+        this.app.arManager.setImageAnchorEnabled(enabled);
+        this.app.log("Ancoraggio immagini: " + (enabled ? "attivato" : "disattivato"));
     }
 }
 

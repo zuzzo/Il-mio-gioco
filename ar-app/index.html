@@ -4,104 +4,140 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Applicazione AR</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="css/style.css">
     <script src="https://cdn.babylonjs.com/babylon.js"></script>
     <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
     <script src="https://cdn.babylonjs.com/gui/babylon.gui.min.js"></script>
 </head>
 <body>
     <div class="container">
+        <!-- Vista AR (per Menu 1, 2 e 4) -->
         <div id="ar-view">
             <video id="camera-feed" autoplay playsinline muted></video>
             <canvas id="render-canvas"></canvas>
         </div>
         
+        <!-- Vista Mappa (per Menu 3) -->
         <div id="map-view" class="hidden">
             <div id="map-container"></div>
+            <div id="map-info">
+                <span id="selected-object-name">Nessun oggetto selezionato</span>
+            </div>
         </div>
         
         <!-- Menu 1: Principale -->
         <div id="menu1" class="menu-panel">
-            <div class="button-group">
-                <button id="place-object-btn" class="menu-btn">Piazza oggetto</button>
-                <button id="map-btn" class="menu-btn">Mappa</button>
-                <button id="explore-btn" class="menu-btn">Esplora</button>
-            </div>
-            
-            <div class="option-group">
-                <label class="toggle-option">
+            <div class="header">
+                <span class="title">MENU 1</span>
+                <label class="toggle-container">
+                    <span>ancora ad immagine</span>
                     <input type="checkbox" id="image-anchor-toggle">
-                    <span class="toggle-label">Ancoraggio immagini</span>
+                    <span class="toggle-switch"></span>
                 </label>
             </div>
             
-            <div class="button-group">
-                <button id="debug-btn" class="utility-btn">Debug</button>
+            <div class="buttons-container">
+                <button id="place-btn" class="menu-btn">Piazza oggetti</button>
+                <button id="map-btn" class="menu-btn">Mappa</button>
+                <button id="explore-btn" class="menu-btn">Esplora</button>
+                <button id="debug-btn" class="menu-btn">Debug</button>
             </div>
         </div>
         
         <!-- Menu 2: Piazzamento oggetti -->
         <div id="menu2" class="menu-panel hidden">
-            <div class="selection-group">
-                <select id="object-select" class="dropdown">
-                    <option value="assets/models/treasure.glb">Tesoro</option>
-                    <option value="assets/models/cube.glb">Cubo</option>
-                    <option value="assets/models/sphere.glb">Sfera</option>
-                    <option value="assets/models/custom.glb">Personalizzato...</option>
-                </select>
-                
-                <div class="file-upload hidden">
-                    <input type="file" id="custom-model-input" accept=".glb,.gltf">
-                </div>
+            <div class="header">
+                <span class="title">MENU 2</span>
+                <label class="toggle-container">
+                    <span>ancora ad immagine</span>
+                    <input type="checkbox" id="image-anchor-toggle2">
+                    <span class="toggle-switch"></span>
+                </label>
             </div>
             
-            <div class="slider-group">
-                <div class="slider-container">
-                    <label for="scale-slider">Dimensione:</label>
-                    <input type="range" min="0.1" max="2" step="0.1" value="1" id="scale-slider" class="horizontal-slider">
+            <div class="controls-container">
+                <div class="vertical-slider-container">
+                    <input type="range" min="0.1" max="2" step="0.1" value="1" class="vertical-slider" id="scale-slider">
                     <span id="scale-value">1.0</span>
                 </div>
                 
-                <div class="slider-container">
-                    <label for="rotation-slider">Rotazione:</label>
-                    <input type="range" min="0" max="360" value="0" id="rotation-slider" class="horizontal-slider">
+                <div class="horizontal-slider-container">
+                    <input type="range" min="0" max="360" value="0" class="horizontal-slider" id="rotation-slider">
                     <span id="rotation-value">0°</span>
                 </div>
             </div>
             
-            <div class="button-group">
-                <button id="confirm-place-btn" class="action-btn">Piazza oggetto</button>
-                <button id="back-menu1-btn" class="back-btn">Indietro</button>
+            <div class="buttons-container">
+                <select id="object-select" class="object-dropdown">
+                    <option value="assets/models/treasure.glb">Seleziona Oggetto</option>
+                    <option value="assets/models/cube.glb">Cubo</option>
+                    <option value="assets/models/sphere.glb">Sfera</option>
+                    <option value="assets/models/custom.glb">Personalizzato...</option>
+                </select>
+                <div class="file-upload hidden">
+                    <input type="file" id="custom-model-input" accept=".glb,.gltf">
+                </div>
+                <button id="confirm-place-btn" class="menu-btn">Piazza oggetto</button>
+                <button id="back-menu1-btn" class="menu-btn">Torna a Menu 1</button>
+                <button id="debug-btn2" class="menu-btn">Debug</button>
             </div>
         </div>
         
         <!-- Menu 3: Mappa -->
         <div id="menu3" class="menu-panel hidden">
+            <div class="header">
+                <span class="title">MENU 3</span>
+            </div>
+            
             <div class="map-controls">
                 <button id="center-map-btn" class="map-btn">Centra su di me</button>
                 <button id="zoom-in-btn" class="map-btn">+</button>
                 <button id="zoom-out-btn" class="map-btn">-</button>
             </div>
             
-            <div class="button-group">
-                <button id="back-menu1-from-map-btn" class="back-btn">Indietro</button>
+            <div class="buttons-container">
+                <button id="delete-object-btn" class="menu-btn">Elimina oggetto selezionato</button>
+                <button id="draw-area-btn" class="menu-btn">Disegna area di gioco</button>
+                <button id="back-menu1-from-map-btn" class="menu-btn">Torna al menu 1</button>
             </div>
         </div>
         
         <!-- Menu 4: Esplora -->
         <div id="menu4" class="menu-panel hidden">
-            <div class="explore-list" id="object-list">
-                <!-- Gli oggetti saranno inseriti qui dinamicamente -->
+            <div class="header">
+                <span class="title">MENU 4</span>
+                <label class="toggle-container">
+                    <span>ancora ad immagine</span>
+                    <input type="checkbox" id="image-anchor-toggle4">
+                    <span class="toggle-switch"></span>
+                </label>
             </div>
             
-            <div class="button-group">
-                <button id="back-menu1-from-explore-btn" class="back-btn">Indietro</button>
+            <div class="controls-container">
+                <div class="vertical-slider-container">
+                    <input type="range" min="0.1" max="2" step="0.1" value="1" class="vertical-slider" id="scale-slider4">
+                    <span id="scale-value4">1.0</span>
+                </div>
+                
+                <div class="horizontal-slider-container">
+                    <input type="range" min="0" max="360" value="0" class="horizontal-slider" id="rotation-slider4">
+                    <span id="rotation-value4">0°</span>
+                </div>
+            </div>
+            
+            <div class="buttons-container">
+                <button id="collected-objects-btn" class="menu-btn">Oggetti collezionati</button>
+                <button id="score-btn" class="menu-btn">Punteggio</button>
+                <button id="back-menu1-from-explore-btn" class="menu-btn">Torna a Menu 1</button>
+                <button id="debug-btn4" class="menu-btn">Debug</button>
             </div>
         </div>
         
         <!-- Pannello di Debug -->
         <div id="debug-panel" class="debug-overlay hidden">
-            <h3>Debug</h3>
+            <div class="debug-header">
+                <h3>Debug</h3>
+            </div>
             <div id="debug-content" class="debug-info"></div>
             <div class="debug-actions">
                 <button id="copy-debug-btn">Copia</button>
@@ -111,18 +147,18 @@
     </div>
     
     <!-- Manager -->
-    <script src="geo-manager.js"></script>
-    <script src="ar-manager.js"></script>
-    <script src="storage-manager.js"></script>
+    <script src="js/managers/geo-manager.js"></script>
+    <script src="js/managers/ar-manager.js"></script>
+    <script src="js/managers/storage-manager.js"></script>
     
     <!-- Menu Scripts -->
-    <script src="menu1.js"></script>
-    <script src="menu2.js"></script>
-    <script src="menu3.js"></script>
-    <script src="menu4.js"></script>
-    <script src="debug.js"></script>
+    <script src="js/menus/menu1.js"></script>
+    <script src="js/menus/menu2.js"></script>
+    <script src="js/menus/menu3.js"></script>
+    <script src="js/menus/menu4.js"></script>
+    <script src="js/utils/debug.js"></script>
     
     <!-- Main App -->
-    <script src="app.js"></script>
+    <script src="js/app.js"></script>
 </body>
 </html>

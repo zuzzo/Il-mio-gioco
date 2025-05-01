@@ -164,7 +164,7 @@ class DebugPanel {
                     }
                 })() ? 'Sì' : 'No',
                 babylonJSVersion: BABYLON ? BABYLON.Engine.Version : 'Non disponibile',
-                imageAnchorEnabled: this.app.isImageAnchorEnabled ? 'Sì' : 'No'
+                imageAnchorEnabled: this.app.arManager.imageAnchorEnabled ? 'Sì' : 'No'
             },
             position: this.app.geoManager.currentPosition ? {
                 latitude: this.app.geoManager.currentPosition.latitude.toFixed(6),
@@ -182,20 +182,6 @@ class DebugPanel {
     }
     
     /**
-     * Gestisce il click sul pulsante copia
-     */
-    onCopyClick() {
-        try {
-            // Copia il testo negli appunti
-            navigator.clipboard.writeText(this.contentElement.textContent)
-                .then(() => {
-                    this.app.showMessage("Informazioni di debug copiate negli appunti");
-                })
-                .catch(err => {
-                    console.error('Errore durante la copia:', err);
-                    this.app
-
-                    /**
      * Gestisce il click sul pulsante copia
      */
     onCopyClick() {
