@@ -11,11 +11,8 @@ class App {
 
         // Manager
         this.geoManager = new GeoManager();
-        this.arManager = new ARManager(
-            document.getElementById('render-canvas'),
-            document.getElementById('camera-feed'),
-            this // Passa l'istanza dell'app all'ARManager
-        );
+        // Istanzia ARManager passando l'istanza dell'app per la comunicazione (es. showMessage)
+        this.arManager = new ARManager(this);
         this.storageManager = new StorageManager();
 
         // Menu
@@ -41,7 +38,16 @@ class App {
             this.showMessage("Errore: Geolocalizzazione non supportata o permessi negati.");
             // Potrebbe essere necessario gestire questo caso in modo più robusto
         }
-        await this.arManager.init();
+        // Chiama init di ARManager passando gli ID corretti e controlla il risultato
+        const arInitialized = await this.arManager.init('render-canvas', 'camera-feed');
+        if (!arInitialized) {
+             this.showMessage("Errore critico: Impossibile inizializzare il sistema AR. Controlla i permessi della fotocamera e la console.");
+             this.log("Inizializzazione AR fallita.");
+             // Potremmo voler bloccare ulteriori inizializzazioni qui
+             // return; // Decommenta se vuoi bloccare tutto in caso di fallimento AR
+        } else {
+            this.log("Inizializzazione AR completata.");
+        }
         this.storageManager.init();
 
         // Inizializza i menu (aggiungono i loro listener)
