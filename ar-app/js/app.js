@@ -48,7 +48,7 @@ class App {
         } else {
             this.log("Inizializzazione AR completata.");
         }
-        this.storageManager.init();
+        // this.storageManager.init(); // Rimosso: StorageManager si inizializza nel costruttore
 
         // Inizializza i menu (aggiungono i loro listener)
         this.menu1.init();
