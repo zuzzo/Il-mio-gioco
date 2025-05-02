@@ -230,7 +230,9 @@ class GameAreaManager {
                     drawError: {
                         color: '#ff0000',
                         message: 'Il poligono non può intersecarsi'
-                    }
+                    },
+                    closeOnClick: true,
+                    minimumPoints: 3
                 },
                 polyline: false,
                 rectangle: false,
@@ -242,12 +244,32 @@ class GameAreaManager {
 
     enableDrawing() {
         this.drawing = true;
+        // Disable map interactions
+        this.map.dragging.disable();
+        this.map.touchZoom.disable();
+        this.map.doubleClickZoom.disable();
+        this.map.scrollWheelZoom.disable();
+        this.map.boxZoom.disable();
+        this.map.keyboard.disable();
+        this.map._container.style.cursor = 'crosshair';
+        
+        // Enable drawing controls
         this.map.addControl(this.drawControl);
         this.map.on('draw:created', this.onDrawComplete, this);
     }
 
     disableDrawing() {
         this.drawing = false;
+        // Re-enable map interactions
+        this.map.dragging.enable();
+        this.map.touchZoom.enable();
+        this.map.doubleClickZoom.enable();
+        this.map.scrollWheelZoom.enable();
+        this.map.boxZoom.enable();
+        this.map.keyboard.enable();
+        this.map._container.style.cursor = '';
+        
+        // Remove drawing controls
         this.map.removeControl(this.drawControl);
         this.map.off('draw:created', this.onDrawComplete, this);
     }
@@ -256,8 +278,8 @@ class GameAreaManager {
         const layer = e.layer;
         const polygon = layer.toGeoJSON();
         
-        if (polygon.geometry.coordinates[0].length < 4) {
-            alert('Devi disegnare un poligono con almeno 3 punti');
+        if (polygon.geometry.coordinates[0].length < 3) {
+            alert('Devi disegnare almeno 3 punti per formare un poligono');
             return;
         }
         
