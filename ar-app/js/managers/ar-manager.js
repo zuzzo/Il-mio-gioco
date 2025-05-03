@@ -1,17 +1,19 @@
 /**
  * Gestore della realtà aumentata basato su Babylon.js
+ * Basato sulla versione alfa che funzionava correttamente
  */
 class ARManager {
-    constructor(app) { // Accetta l'istanza dell'app
-        this.app = app; // Memorizza l'istanza dell'app
+    constructor(app) {
+        this.app = app;
+        this.canvas = null;
         this.engine = null;
         this.scene = null;
         this.camera = null;
-        this.virtualObject = null;
-        this.previewObject = null;
+        this.arObject = null;
         this.videoTexture = null;
         this.arActive = false;
         this.imageAnchorEnabled = false;
+        this.savedObjectOrientation = 0; // Angolo in gradi
     }
 
     /**
@@ -23,27 +25,27 @@ class ARManager {
     async init(canvasId, videoId) {
         try {
             // Ottieni il canvas e crea l'engine Babylon
-            const canvas = document.getElementById(canvasId);
-            if (!canvas) throw new Error(`Canvas con ID "${canvasId}" non trovato.`);
-            this.engine = new BABYLON.Engine(canvas, true);
+            this.canvas = document.getElementById(canvasId);
+            if (!this.canvas) throw new Error(`Canvas con ID "${canvasId}" non trovato.`);
+            this.engine = new BABYLON.Engine(this.canvas, true);
 
             // Crea la scena
             this.scene = new BABYLON.Scene(this.engine);
             this.scene.clearColor = new BABYLON.Color4(0, 0, 0, 0); // Trasparente
 
-            // Configura la camera con parametri ottimizzati
+            // Configura la camera
             this.camera = new BABYLON.ArcRotateCamera(
                 "ARcamera",
                 -Math.PI / 2,
                 Math.PI / 2,
-                3, // Distanza iniziale ridotta
+                3,
                 BABYLON.Vector3.Zero(),
                 this.scene
             );
-            this.camera.attachControl(canvas, true);
-            this.camera.lowerRadiusLimit = 1; // Limite minimo aumentato
+            this.camera.attachControl(this.canvas, true);
+            this.camera.lowerRadiusLimit = 1;
             this.camera.upperRadiusLimit = 10;
-            this.camera.inertia = 0.5; // Riduce l'inerzia per un controllo più diretto
+            this.camera.inertia = 0.5;
 
             // Configura l'illuminazione
             const light = new BABYLON.HemisphericLight(
@@ -55,7 +57,7 @@ class ARManager {
 
             // Crea la texture dal video della fotocamera
             const video = document.getElementById(videoId);
-             if (!video) throw new Error(`Elemento video con ID "${videoId}" non trovato.`);
+            if (!video) throw new Error(`Elemento video con ID "${videoId}" non trovato.`);
             this.videoTexture = new BABYLON.VideoTexture(
                 "videoTexture",
                 video,
@@ -64,14 +66,6 @@ class ARManager {
                 true
             );
 
-            // Rimuoviamo il piano video per evitare la doppia visualizzazione
-            // Utilizziamo solo l'elemento video HTML diretto
-            
-            // Creiamo un materiale trasparente per il background
-            const clearMaterial = new BABYLON.StandardMaterial("clearMat", this.scene);
-            clearMaterial.alpha = 0;
-            clearMaterial.disableLighting = true;
-            
             // Impostiamo lo sfondo della scena come trasparente
             this.scene.clearColor = new BABYLON.Color4(0, 0, 0, 0);
 
@@ -86,7 +80,7 @@ class ARManager {
                 this.engine.resize();
             });
 
-            this.arActive = true; // Mark AR as active
+            this.arActive = true;
             this.app.log("AR Manager inizializzato correttamente.");
             return true;
         } catch (error) {
@@ -109,7 +103,7 @@ class ARManager {
             const stream = await navigator.mediaDevices.getUserMedia({
                 video: {
                     facingMode: 'environment', // Preferisci la fotocamera posteriore
-                    width: { ideal: 1280 }, // Richieste comuni
+                    width: { ideal: 1280 },
                     height: { ideal: 720 }
                 }
             });
@@ -128,11 +122,11 @@ class ARManager {
             console.error("Errore nell'accesso alla fotocamera:", error);
             this.app.log(`Errore accesso fotocamera: ${error.name} - ${error.message}`);
             if (error.name === "NotAllowedError") {
-                 throw new Error("Permesso fotocamera negato.");
+                throw new Error("Permesso fotocamera negato.");
             } else if (error.name === "NotFoundError") {
-                 throw new Error("Nessuna fotocamera posteriore trovata.");
+                throw new Error("Nessuna fotocamera posteriore trovata.");
             } else {
-                 throw new Error(`Errore fotocamera: ${error.message}`);
+                throw new Error(`Errore fotocamera: ${error.message}`);
             }
         }
     }
@@ -168,384 +162,225 @@ class ARManager {
     async updatePreviewObject(modelPath, scale, rotation) {
         if (!this.scene) return;
         try {
-            // Rimuovi l'oggetto di anteprima esistente
-            if (this.previewObject) {
-                this.previewObject.dispose();
-                this.previewObject = null;
-            }
-             // Rimuovi anche l'oggetto virtuale principale se presente
-            if (this.virtualObject) {
-                this.virtualObject.dispose();
-                this.virtualObject = null;
+            // Rimuovi l'oggetto esistente se presente
+            if (this.arObject) {
+                this.arObject.dispose();
+                this.arObject = null;
             }
             
-            // Gestione speciale per modelli personalizzati (blob URLs)
-            if (modelPath.startsWith("blob:")) {
-                this.app.log(`Caricamento anteprima da Blob URL`);
+            // Mostra un cubo placeholder mentre il modello si carica
+            const placeholder = BABYLON.MeshBuilder.CreateBox("placeholder", {
+                width: 0.2, height: 0.2, depth: 0.2
+            }, this.scene);
+            
+            const placeholderMaterial = new BABYLON.StandardMaterial("placeholderMat", this.scene);
+            placeholderMaterial.diffuseColor = new BABYLON.Color3(0.5, 0.5, 0.5);
+            placeholderMaterial.alpha = 0.5;
+            placeholder.material = placeholderMaterial;
+            
+            try {
+                // Carica il modello 3D
+                const result = await BABYLON.SceneLoader.ImportMeshAsync("", "", modelPath, this.scene);
                 
-                try {
-                    // Carica direttamente dal blob URL
-                    const result = await BABYLON.SceneLoader.ImportMeshAsync(
-                        null, // Nomi mesh (null per tutti)
-                        "", // Nessun rootUrl per blob
-                        modelPath,
-                        this.scene
-                    );
-                    
-                    this.processLoadedModel(result, scale, rotation);
-                    return;
-                } catch (error) {
-                    throw new Error(`Errore caricamento modello personalizzato: ${error.message}`);
+                // Il modello caricato è nell'array result.meshes
+                this.arObject = result.meshes[0]; // Il nodo principale
+                
+                // Calcola la dimensione del modello e scala se necessario
+                const boundingInfo = this.calculateBoundingInfo(result.meshes);
+                const maxDimension = Math.max(
+                    boundingInfo.maximum.x - boundingInfo.minimum.x,
+                    boundingInfo.maximum.y - boundingInfo.minimum.y,
+                    boundingInfo.maximum.z - boundingInfo.minimum.z
+                );
+                
+                // Scala il modello in base al parametro scale
+                const scaleFactor = scale * (0.5 / maxDimension);
+                this.arObject.scaling = new BABYLON.Vector3(scaleFactor, scaleFactor, scaleFactor);
+                
+                // Posiziona l'oggetto davanti alla camera
+                const forwardDirection = this.camera.getDirection(BABYLON.Vector3.Forward());
+                this.arObject.position = this.camera.position.add(forwardDirection.scale(2));
+                
+                // Applica la rotazione
+                const rotationRadians = (rotation * Math.PI) / 180;
+                this.arObject.rotation = new BABYLON.Vector3(0, rotationRadians, 0);
+                
+                // Rimuovi il placeholder
+                placeholder.dispose();
+                
+                this.app.log(`Anteprima aggiornata: ${modelPath}, Scala: ${scale}, Rotazione: ${rotation}°`);
+            } catch (error) {
+                // In caso di errore, usa il placeholder come fallback
+                this.app.log(`Errore caricamento modello: ${error.message}. Usando fallback.`);
+                
+                // Colora il placeholder in base al tipo di oggetto
+                if (modelPath.includes("treasure")) {
+                    placeholderMaterial.diffuseColor = new BABYLON.Color3(1, 0.84, 0); // Oro
+                    placeholderMaterial.emissiveColor = new BABYLON.Color3(0.5, 0.4, 0);
+                } else if (modelPath.includes("key")) {
+                    placeholderMaterial.diffuseColor = new BABYLON.Color3(0.75, 0.75, 0.75); // Argento
+                    placeholderMaterial.emissiveColor = new BABYLON.Color3(0.3, 0.3, 0.3);
+                } else if (modelPath.includes("door")) {
+                    placeholderMaterial.diffuseColor = new BABYLON.Color3(0.55, 0.27, 0.07); // Marrone
+                    placeholderMaterial.emissiveColor = new BABYLON.Color3(0.2, 0.1, 0);
+                } else {
+                    placeholderMaterial.diffuseColor = new BABYLON.Color3(1, 0, 0); // Rosso di default
+                    placeholderMaterial.emissiveColor = new BABYLON.Color3(0.5, 0, 0);
                 }
+                
+                // Usa il placeholder come oggetto principale
+                this.arObject = placeholder;
+                
+                // Posiziona l'oggetto davanti alla camera
+                const forwardDirection = this.camera.getDirection(BABYLON.Vector3.Forward());
+                this.arObject.position = this.camera.position.add(forwardDirection.scale(2));
+                
+                // Applica scala e rotazione
+                this.arObject.scaling = new BABYLON.Vector3(scale, scale, scale);
+                const rotationRadians = (rotation * Math.PI) / 180;
+                this.arObject.rotation = new BABYLON.Vector3(0, rotationRadians, 0);
+                
+                this.app.showMessage("Usando un'anteprima semplificata. Nell'app finale verranno mostrati i modelli 3D completi.");
             }
-
-            // Determina la root URL per il caricamento
-            let rootUrl = "";
-            let fileName = modelPath;
-            if (modelPath.startsWith("blob:")) {
-                // Se è un URL blob, non c'è rootUrl e il filename è l'URL stesso
-                rootUrl = "";
-                fileName = modelPath;
-            } else {
-                 // Altrimenti, estrai il percorso e il nome file
-                const lastSlash = modelPath.lastIndexOf('/');
-                if (lastSlash !== -1) {
-                    rootUrl = modelPath.substring(0, lastSlash + 1);
-                    fileName = modelPath.substring(lastSlash + 1);
-                }
-            }
-
-            this.app.log(`Caricamento anteprima: ${fileName} da ${rootUrl || 'Blob URL'}`);
-
-            // Carica il modello 3D usando l'approccio della versione alfa
-            // che funzionava senza problemi CORS
-            const result = await BABYLON.SceneLoader.ImportMeshAsync(
-                "", // Nomi mesh (stringa vuota per tutti)
-                "", // rootUrl vuoto
-                modelPath, // Percorso completo
-                this.scene
-            );
-
-            if (!result.meshes || result.meshes.length === 0) {
-                throw new Error("Il modello caricato non contiene mesh.");
-            }
-
-            // Trova il root mesh (spesso il primo o uno chiamato __root__)
-            const rootMesh = result.meshes[0];
-
-            // Crea un parent vuoto per controllare posizione/rotazione/scala
-            this.previewObject = new BABYLON.TransformNode("previewParent", this.scene);
-            rootMesh.parent = this.previewObject;
-
-            // Centra l'oggetto se necessario (opzionale, dipende dai modelli)
-            // const boundingInfo = rootMesh.getHierarchyBoundingVectors();
-            // const centerOffset = boundingInfo.center.scale(-1);
-            // rootMesh.position = centerOffset;
-
-            // Posiziona l'oggetto davanti alla camera (aggiusta la distanza se necessario)
-            const previewDistance = 2;
-            // Calcola la posizione davanti alla camera corrente
-            const forwardDirection = this.camera.getDirection(BABYLON.Vector3.Forward());
-            this.previewObject.position = this.camera.position.add(forwardDirection.scale(previewDistance));
-
-
-            // Fai puntare l'oggetto verso la camera (opzionale)
-            // this.previewObject.lookAt(this.camera.position);
-
-            // Applica scala e rotazione
-            this.previewObject.scaling = new BABYLON.Vector3(scale, scale, scale);
-            // La rotazione è sull'asse Y
-            this.previewObject.rotation = new BABYLON.Vector3(0, BABYLON.Tools.ToRadians(rotation), 0);
-
-            this.app.log(`Anteprima aggiornata: ${modelPath}, Scala: ${scale}, Rotazione: ${rotation}°`);
-
         } catch (error) {
             console.error("Errore nell'aggiornamento dell'oggetto di anteprima:", error);
-            
-            // Gestione degli errori di caricamento
-            if (error.message && (error.message.includes("CORS") || error.message.includes("Unable to load") || error.message.includes("LoadFileError"))) {
-                this.app.log(`Errore caricamento modello: ${error.message}. Creazione oggetto fallback per l'anteprima.`);
-                
-                // Crea un cubo colorato come fallback per l'anteprima
-                this.createPreviewFallbackObject(modelPath, scale, rotation);
-                return;
-            } else {
-                this.app.log(`Errore anteprima: ${error.message}`);
-                this.app.showMessage(`Errore caricamento anteprima: ${error.message}`);
-            }
+            this.app.log(`Errore anteprima: ${error.message}`);
+            this.app.showMessage(`Errore caricamento anteprima: ${error.message}`);
             
             // Assicurati che l'oggetto venga rimosso in caso di errore
-            if (this.previewObject) {
-                this.previewObject.dispose();
-                this.previewObject = null;
+            if (this.arObject) {
+                this.arObject.dispose();
+                this.arObject = null;
             }
         }
     }
     
     /**
-     * Elabora un modello 3D caricato
-     * @private
-     * @param {Object} result - Risultato del caricamento del modello
-     * @param {number} scale - Scala dell'oggetto
-     * @param {number} rotation - Rotazione dell'oggetto in gradi (asse Y)
+     * Calcola la bounding box per un gruppo di mesh
+     * @param {Array} meshes - Array di mesh
+     * @returns {BABYLON.BoundingInfo} Informazioni sui limiti dell'oggetto
      */
-    processLoadedModel(result, scale, rotation) {
-        if (!result.meshes || result.meshes.length === 0) {
-            throw new Error("Il modello caricato non contiene mesh.");
+    calculateBoundingInfo(meshes) {
+        let min = new BABYLON.Vector3(Number.MAX_VALUE, Number.MAX_VALUE, Number.MAX_VALUE);
+        let max = new BABYLON.Vector3(Number.MIN_VALUE, Number.MIN_VALUE, Number.MIN_VALUE);
+        
+        for (const mesh of meshes) {
+            if (mesh.getBoundingInfo) {
+                const boundingInfo = mesh.getBoundingInfo();
+                const meshMin = boundingInfo.minimum;
+                const meshMax = boundingInfo.maximum;
+                
+                min = BABYLON.Vector3.Minimize(min, meshMin);
+                max = BABYLON.Vector3.Maximize(max, meshMax);
+            }
         }
-
-        // Trova il root mesh (spesso il primo o uno chiamato __root__)
-        const rootMesh = result.meshes[0];
-
-        // Crea un parent vuoto per controllare posizione/rotazione/scala
-        this.previewObject = new BABYLON.TransformNode("previewParent", this.scene);
-        rootMesh.parent = this.previewObject;
-
-        // Posiziona l'oggetto davanti alla camera
-        const previewDistance = 2;
-        const forwardDirection = this.camera.getDirection(BABYLON.Vector3.Forward());
-        this.previewObject.position = this.camera.position.add(forwardDirection.scale(previewDistance));
-
-        // Applica scala e rotazione
-        this.previewObject.scaling = new BABYLON.Vector3(scale, scale, scale);
-        this.previewObject.rotation = new BABYLON.Vector3(0, BABYLON.Tools.ToRadians(rotation), 0);
+        
+        return new BABYLON.BoundingInfo(min, max);
     }
 
     /**
-     * Mostra un oggetto piazzato nel mondo AR (logica semplificata)
+     * Mostra un oggetto piazzato nel mondo AR
      * @param {Object} objectData - Dati dell'oggetto (modelPath, scale, rotation, position, orientation, isCustomModel, id?)
      */
     async showPlacedObject(objectData) {
-         if (!this.scene || !this.app.geoManager.currentPosition) return;
-         try {
-             // Rimuovi anteprima se presente
-             if (this.previewObject) {
-                 this.previewObject.dispose();
-                 this.previewObject = null;
-             }
-             // Rimuovi oggetto virtuale precedente se presente
-             if (this.virtualObject) {
-                 this.virtualObject.dispose();
-                 this.virtualObject = null;
-             }
-             
-             // Gestione speciale per modelli personalizzati (blob URLs)
-             if (objectData.isCustomModel && objectData.modelPath.startsWith("blob:")) {
-                 this.app.log(`Caricamento oggetto piazzato da Blob URL`);
-                 try {
-                     const result = await BABYLON.SceneLoader.ImportMeshAsync(
-                         null, // Nomi mesh (null per tutti)
-                         "", // Nessun rootUrl per blob
-                         objectData.modelPath,
-                         this.scene
-                     );
-                     
-                     // Usa il metodo comune per elaborare l'oggetto
-                     this.processPlacedObject(result, objectData);
-                     // Aggiorna la posizione e l'orientamento
-                     this.updateObjectPosition(objectData);
-                     return;
-                 } catch (error) {
-                     throw new Error(`Errore caricamento modello personalizzato: ${error.message}`);
-                 }
-             }
-
-             // Carica il modello
-             try {
-                 // Usa l'approccio della versione alfa che funzionava senza problemi CORS
-                 const result = await BABYLON.SceneLoader.ImportMeshAsync(
-                     "", // Nomi mesh (stringa vuota per tutti)
-                     "", // rootUrl vuoto
-                     objectData.modelPath, // Percorso completo
-                     this.scene
-                 );
-                 
-                 // Usa il metodo comune per elaborare l'oggetto
-                 this.processPlacedObject(result, objectData);
-                 // Aggiorna la posizione e l'orientamento
-                 this.updateObjectPosition(objectData);
-                 
-             } catch (error) {
-                 // Gestione degli errori di caricamento
-                 if (error.message && (error.message.includes("CORS") || error.message.includes("Unable to load") || error.message.includes("LoadFileError"))) {
-                     this.app.log(`Errore caricamento modello: ${error.message}. Creazione oggetto fallback.`);
-                     this.app.showMessage("Usando un oggetto semplificato. Nell'app finale verranno mostrati i modelli 3D completi.");
-                     
-                     // Fallback: crea un cubo colorato come nella versione alfa
-                     this.createFallbackObject(objectData);
-                     // Aggiorna la posizione e l'orientamento
-                     this.updateObjectPosition(objectData);
-                     return;
-                 }
-                 throw error;
-             }
-
-
-         } catch (error) {
-             console.error(`Errore nel mostrare l'oggetto piazzato ${objectData.name}:`, error);
-             this.app.log(`Errore visualizzazione oggetto ${objectData.name}: ${error.message}`);
-             this.app.showMessage(`Impossibile visualizzare l'oggetto ${objectData.name}.`);
-              if (this.virtualObject) {
-                 this.virtualObject.dispose();
-                 this.virtualObject = null;
-             }
-         }
-    }
-    
-    /**
-     * Elabora un oggetto piazzato nel mondo AR
-     * @private
-     * @param {Object} result - Risultato del caricamento del modello
-     * @param {Object} objectData - Dati dell'oggetto
-     * @param {number} x - Posizione X
-     * @param {number} y - Posizione Y
-     * @param {number} z - Posizione Z
-     */
-    processPlacedObject(result, objectData, x = 0, y = 0, z = 0) {
-        if (!result.meshes || result.meshes.length === 0) {
-            throw new Error("Il modello caricato non contiene mesh.");
+        if (!this.scene || !this.app.geoManager.currentPosition) return;
+        try {
+            // Rimuovi l'oggetto esistente se presente
+            if (this.arObject) {
+                this.arObject.dispose();
+                this.arObject = null;
+            }
+            
+            // Salva l'orientamento dell'oggetto
+            this.savedObjectOrientation = objectData.rotation;
+            
+            try {
+                // Carica il modello 3D
+                const result = await BABYLON.SceneLoader.ImportMeshAsync("", "", objectData.modelPath, this.scene);
+                
+                // Il modello caricato è nell'array result.meshes
+                this.arObject = result.meshes[0]; // Il nodo principale
+                
+                // Calcola la dimensione del modello e scala se necessario
+                const boundingInfo = this.calculateBoundingInfo(result.meshes);
+                const maxDimension = Math.max(
+                    boundingInfo.maximum.x - boundingInfo.minimum.x,
+                    boundingInfo.maximum.y - boundingInfo.minimum.y,
+                    boundingInfo.maximum.z - boundingInfo.minimum.z
+                );
+                
+                // Scala il modello in base al parametro scale
+                const scaleFactor = objectData.scale * (0.5 / maxDimension);
+                this.arObject.scaling = new BABYLON.Vector3(scaleFactor, scaleFactor, scaleFactor);
+                
+                // Posiziona inizialmente l'oggetto davanti alla camera
+                this.arObject.position = new BABYLON.Vector3(0, 0, 2);
+                
+                // Applica la rotazione basata sull'orientamento salvato
+                const orientationRadians = (this.savedObjectOrientation * Math.PI) / 180;
+                this.arObject.rotation = new BABYLON.Vector3(0, -orientationRadians, 0);
+                
+                // Aggiorna la posizione in base alla geolocalizzazione
+                this.updateObjectPosition(objectData);
+                
+                this.app.log(`Oggetto ${objectData.name} posizionato con orientamento: ${this.savedObjectOrientation.toFixed(1)}°`);
+            } catch (error) {
+                this.app.log(`Errore caricamento modello: ${error.message}. Usando fallback.`);
+                
+                // In caso di errore, usa un cubo colorato come fallback
+                this.arObject = BABYLON.MeshBuilder.CreateBox("arObject", {
+                    width: 0.5, height: 0.5, depth: 0.5
+                }, this.scene);
+                
+                const material = new BABYLON.StandardMaterial("objectMaterial", this.scene);
+                
+                // Colora il cubo in base al tipo di oggetto
+                if (objectData.modelPath.includes("treasure")) {
+                    material.diffuseColor = new BABYLON.Color3(1, 0.84, 0); // Oro
+                    material.emissiveColor = new BABYLON.Color3(0.5, 0.4, 0);
+                } else if (objectData.modelPath.includes("key")) {
+                    material.diffuseColor = new BABYLON.Color3(0.75, 0.75, 0.75); // Argento
+                    material.emissiveColor = new BABYLON.Color3(0.3, 0.3, 0.3);
+                } else if (objectData.modelPath.includes("door")) {
+                    material.diffuseColor = new BABYLON.Color3(0.55, 0.27, 0.07); // Marrone
+                    material.emissiveColor = new BABYLON.Color3(0.2, 0.1, 0);
+                } else {
+                    material.diffuseColor = new BABYLON.Color3(1, 0, 0); // Rosso di default
+                    material.emissiveColor = new BABYLON.Color3(0.5, 0, 0);
+                }
+                
+                this.arObject.material = material;
+                
+                // Posiziona inizialmente l'oggetto davanti alla camera
+                this.arObject.position = new BABYLON.Vector3(0, 0, 2);
+                
+                // Applica la rotazione basata sull'orientamento salvato
+                const orientationRadians = (this.savedObjectOrientation * Math.PI) / 180;
+                this.arObject.rotation = new BABYLON.Vector3(0, -orientationRadians, 0);
+                
+                // Aggiorna la posizione in base alla geolocalizzazione
+                this.updateObjectPosition(objectData);
+                
+                this.app.showMessage("Usando un oggetto semplificato. Nell'app finale verranno mostrati i modelli 3D completi.");
+            }
+        } catch (error) {
+            console.error(`Errore nel mostrare l'oggetto piazzato ${objectData.name}:`, error);
+            this.app.log(`Errore visualizzazione oggetto ${objectData.name}: ${error.message}`);
+            this.app.showMessage(`Impossibile visualizzare l'oggetto ${objectData.name}.`);
+            
+            if (this.arObject) {
+                this.arObject.dispose();
+                this.arObject = null;
+            }
         }
-        
-        // Trova il root mesh
-        const rootMesh = result.meshes[0];
-        
-        // Crea un parent vuoto per controllare posizione/rotazione/scala
-        this.virtualObject = new BABYLON.TransformNode(`placed_${objectData.id || Date.now()}`, this.scene);
-        rootMesh.parent = this.virtualObject;
-        
-        // Applica posizione, rotazione, scala
-        this.virtualObject.position = new BABYLON.Vector3(x, y, z);
-        this.virtualObject.scaling = new BABYLON.Vector3(objectData.scale, objectData.scale, objectData.scale);
-        this.virtualObject.rotation = new BABYLON.Vector3(0, BABYLON.Tools.ToRadians(objectData.rotation), 0);
-    }
-
-
-    /**
-     * Attiva/disattiva l'ancoraggio delle immagini (placeholder)
-     * @param {boolean} enabled - Attiva/disattiva l'ancoraggio
-     */
-    setImageAnchorEnabled(enabled) {
-        this.imageAnchorEnabled = enabled;
-        // Logica placeholder - l'implementazione reale richiederebbe librerie specifiche
-        this.app.log(`Ancoraggio immagini ${enabled ? 'attivato' : 'disattivato'} (Logica non implementata)`);
-        if (enabled) {
-            this.app.showMessage("Ancoraggio immagini non ancora implementato.");
-        }
-        // Qui si potrebbe avviare/fermare il tracking di immagini se fosse implementato
     }
 
     /**
-     * Crea un oggetto fallback (cubo colorato) quando non è possibile caricare il modello
-     * @private
-     * @param {Object} objectData - Dati dell'oggetto
-     * @param {number} x - Posizione X
-     * @param {number} y - Posizione Y
-     * @param {number} z - Posizione Z
-     */
-    createFallbackObject(objectData, x = 0, y = 0, z = 0) {
-        // Crea un cubo come fallback
-        const fallbackMesh = BABYLON.MeshBuilder.CreateBox("fallback", {
-            width: 0.5, 
-            height: 0.5, 
-            depth: 0.5
-        }, this.scene);
-        
-        // Crea un materiale colorato
-        const material = new BABYLON.StandardMaterial("fallbackMaterial", this.scene);
-        
-        // Scegli il colore in base al tipo di oggetto
-        if (objectData.modelPath.includes("treasure")) {
-            material.diffuseColor = new BABYLON.Color3(1, 0.84, 0); // Oro
-            material.emissiveColor = new BABYLON.Color3(0.5, 0.4, 0);
-        } else if (objectData.modelPath.includes("key")) {
-            material.diffuseColor = new BABYLON.Color3(0.75, 0.75, 0.75); // Argento
-            material.emissiveColor = new BABYLON.Color3(0.3, 0.3, 0.3);
-        } else if (objectData.modelPath.includes("door")) {
-            material.diffuseColor = new BABYLON.Color3(0.55, 0.27, 0.07); // Marrone
-            material.emissiveColor = new BABYLON.Color3(0.2, 0.1, 0);
-        } else {
-            material.diffuseColor = new BABYLON.Color3(1, 0, 0); // Rosso di default
-            material.emissiveColor = new BABYLON.Color3(0.5, 0, 0);
-        }
-        
-        fallbackMesh.material = material;
-        
-        // Crea un parent vuoto per controllare posizione/rotazione/scala
-        this.virtualObject = new BABYLON.TransformNode(`placed_${objectData.id || Date.now()}`, this.scene);
-        fallbackMesh.parent = this.virtualObject;
-        
-        // Applica posizione, rotazione, scala
-        this.virtualObject.position = new BABYLON.Vector3(x, y, z);
-        this.virtualObject.scaling = new BABYLON.Vector3(objectData.scale, objectData.scale, objectData.scale);
-        this.virtualObject.rotation = new BABYLON.Vector3(0, BABYLON.Tools.ToRadians(objectData.rotation), 0);
-        
-        this.app.log(`Creato oggetto fallback per ${objectData.name}`);
-    }
-    /**
-     * Crea un oggetto fallback per l'anteprima quando non è possibile caricare il modello
-     * @private
-     * @param {string} modelPath - Percorso del modello 3D
-     * @param {number} scale - Scala dell'oggetto
-     * @param {number} rotation - Rotazione dell'oggetto in gradi (asse Y)
-     */
-    createPreviewFallbackObject(modelPath, scale, rotation) {
-        // Rimuovi l'oggetto di anteprima esistente se presente
-        if (this.previewObject) {
-            this.previewObject.dispose();
-            this.previewObject = null;
-        }
-        
-        // Crea un cubo come fallback
-        const fallbackMesh = BABYLON.MeshBuilder.CreateBox("previewFallback", {
-            width: 0.5, 
-            height: 0.5, 
-            depth: 0.5
-        }, this.scene);
-        
-        // Crea un materiale colorato
-        const material = new BABYLON.StandardMaterial("previewFallbackMaterial", this.scene);
-        
-        // Scegli il colore in base al tipo di oggetto
-        if (modelPath.includes("treasure")) {
-            material.diffuseColor = new BABYLON.Color3(1, 0.84, 0); // Oro
-            material.emissiveColor = new BABYLON.Color3(0.5, 0.4, 0);
-        } else if (modelPath.includes("key")) {
-            material.diffuseColor = new BABYLON.Color3(0.75, 0.75, 0.75); // Argento
-            material.emissiveColor = new BABYLON.Color3(0.3, 0.3, 0.3);
-        } else if (modelPath.includes("door")) {
-            material.diffuseColor = new BABYLON.Color3(0.55, 0.27, 0.07); // Marrone
-            material.emissiveColor = new BABYLON.Color3(0.2, 0.1, 0);
-        } else {
-            material.diffuseColor = new BABYLON.Color3(1, 0, 0); // Rosso di default
-            material.emissiveColor = new BABYLON.Color3(0.5, 0, 0);
-        }
-        
-        // Aggiungi un po' di trasparenza per indicare che è un'anteprima
-        material.alpha = 0.7;
-        fallbackMesh.material = material;
-        
-        // Crea un parent vuoto per controllare posizione/rotazione/scala
-        this.previewObject = new BABYLON.TransformNode("previewParent", this.scene);
-        fallbackMesh.parent = this.previewObject;
-        
-        // Posiziona l'oggetto davanti alla camera
-        const previewDistance = 2;
-        const forwardDirection = this.camera.getDirection(BABYLON.Vector3.Forward());
-        this.previewObject.position = this.camera.position.add(forwardDirection.scale(previewDistance));
-        
-        // Applica scala e rotazione
-        this.previewObject.scaling = new BABYLON.Vector3(scale, scale, scale);
-        this.previewObject.rotation = new BABYLON.Vector3(0, BABYLON.Tools.ToRadians(rotation), 0);
-        
-        this.app.log(`Creato oggetto fallback per l'anteprima di ${modelPath}`);
-        this.app.showMessage("Usando un'anteprima semplificata. Nell'app finale verranno mostrati i modelli 3D completi.");
-    }
-    /**
-     * Aggiorna la posizione e l'orientamento di un oggetto piazzato
+     * Aggiorna la posizione dell'oggetto in base alla geolocalizzazione
      * @param {Object} objectData - Dati dell'oggetto
      */
     updateObjectPosition(objectData) {
-        if (!this.virtualObject || !this.app.geoManager.currentPosition) return;
+        if (!this.arObject || !this.app.geoManager.currentPosition) return;
         
         // Calcola posizione relativa
         const userPos = this.app.geoManager.currentPosition;
@@ -560,24 +395,39 @@ class ARManager {
         );
         const userHeading = this.app.geoManager.currentOrientation?.alpha || 0;
 
-        // Direzione relativa dell'oggetto rispetto all'utente
-        const relativeBearing = (bearing - userHeading + 360) % 360;
-        const relativeBearingRad = BABYLON.Tools.ToRadians(relativeBearing);
-
-        // Posizionamento semplificato a distanza fissa nella direzione relativa
-        const placementDistance = Math.min(distance, 20); // Limita la distanza massima
-        const x = Math.sin(relativeBearingRad) * placementDistance;
-        const z = Math.cos(relativeBearingRad) * placementDistance;
-        const y = 0; // Altezza dal suolo (da migliorare)
-
-        // Aggiorna la posizione dell'oggetto
-        this.virtualObject.position = new BABYLON.Vector3(x, y, z);
+        // Limita la distanza massima per una migliore visualizzazione in AR
+        const maxDistance = 20; // metri
+        const clampedDistance = Math.min(distance, maxDistance);
         
-        // Applica la rotazione salvata (orientamento iniziale)
-        // Nota: la rotazione Y è negativa rispetto all'orientamento della bussola
-        const orientationRadians = (objectData.rotation * Math.PI) / 180;
-        this.virtualObject.rotation.y = -orientationRadians;
+        // Converti la direzione da gradi a radianti
+        const bearingRad = (bearing * Math.PI) / 180;
         
-        this.app.log(`Oggetto ${objectData.name} aggiornato - Dist: ${distance.toFixed(1)}m, RelBearing: ${relativeBearing.toFixed(1)}°`);
+        // Calcola la posizione relativa
+        const x = clampedDistance * Math.sin(bearingRad);
+        const z = clampedDistance * Math.cos(bearingRad);
+        
+        // Aggiorna la posizione
+        this.arObject.position = new BABYLON.Vector3(x, 0, z);
+        
+        // L'orientamento dell'oggetto è stato impostato durante il placeVirtualObject
+        // basato sull'orientamento del dispositivo al momento del posizionamento
+        
+        this.app.log(`Oggetto aggiornato - Distanza: ${clampedDistance.toFixed(2)}m, Direzione: ${bearing.toFixed(1)}°`);
     }
-} // Chiusura della classe ARManager
+
+    /**
+     * Attiva/disattiva l'ancoraggio delle immagini (placeholder)
+     * @param {boolean} enabled - Attiva/disattiva l'ancoraggio
+     */
+    setImageAnchorEnabled(enabled) {
+        this.imageAnchorEnabled = enabled;
+        // Logica placeholder - l'implementazione reale richiederebbe librerie specifiche
+        this.app.log(`Ancoraggio immagini ${enabled ? 'attivato' : 'disattivato'} (Logica non implementata)`);
+        if (enabled) {
+            this.app.showMessage("Ancoraggio immagini non ancora implementato.");
+        }
+    }
+}
+
+// Esporta la classe
+window.ARManager = ARManager;

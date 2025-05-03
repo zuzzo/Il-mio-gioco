@@ -132,7 +132,7 @@ class Menu4 {
         );
         
         // Visualizza l'oggetto nell'AR
-        this.app.arManager.showObject(object, bearing);
+        this.app.arManager.showPlacedObject(object);
         
         // Mostra informazioni sull'oggetto
         this.app.showMessage(
@@ -150,8 +150,8 @@ class Menu4 {
         this.scaleValue.textContent = this.objectScale.toFixed(1);
         
         // Aggiorna l'oggetto virtuale se presente
-        if (this.app.arManager.virtualObject && this.nearbyObjects.length > 0) {
-            this.app.arManager.virtualObject.scaling = new BABYLON.Vector3(
+        if (this.app.arManager.arObject && this.nearbyObjects.length > 0) {
+            this.app.arManager.arObject.scaling = new BABYLON.Vector3(
                 this.objectScale,
                 this.objectScale,
                 this.objectScale
@@ -167,8 +167,8 @@ class Menu4 {
         this.rotationValue.textContent = this.objectRotation + '°';
         
         // Aggiorna l'oggetto virtuale se presente
-        if (this.app.arManager.virtualObject && this.nearbyObjects.length > 0) {
-            this.app.arManager.virtualObject.rotation = new BABYLON.Vector3(
+        if (this.app.arManager.arObject && this.nearbyObjects.length > 0) {
+            this.app.arManager.arObject.rotation = new BABYLON.Vector3(
                 0,
                 BABYLON.Tools.ToRadians(this.objectRotation),
                 0
