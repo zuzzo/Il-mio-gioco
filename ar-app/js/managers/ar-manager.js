@@ -42,9 +42,10 @@ class ARManager {
                 BABYLON.Vector3.Zero(),
                 this.scene
             );
-            this.camera.attachControl(this.canvas, true);
-            this.camera.lowerRadiusLimit = 1;
-            this.camera.upperRadiusLimit = 10;
+            // Disabilitiamo il controllo manuale della camera per la vista AR
+            // this.camera.attachControl(this.canvas, true);
+            this.camera.lowerRadiusLimit = 0.1; // Permetti zoom più vicino se necessario
+            this.camera.upperRadiusLimit = 10; // Limita lo zoom indietro
             this.camera.inertia = 0.5;
 
             // Configura l'illuminazione
@@ -72,10 +73,13 @@ class ARManager {
             // Configura fotocamera
             await this.setupCamera(video);
 
-            // Non usiamo né Layer né backgroundTexture, ci affidiamo al CSS
-            // per mostrare il video dietro il canvas trasparente.
+            // Crea un layer per mostrare il video come sfondo (risolve ghosting)
+            const backgroundLayer = new BABYLON.Layer("cameraBackgroundLayer", null, this.scene, true);
+            backgroundLayer.texture = this.videoTexture;
+            backgroundLayer.isBackground = true;
+            // backgroundLayer.texture.vScale = -1; // Decommenta SOLO se il video è sottosopra
 
-            // Avvia il loop di rendering
+            // Avvia il loop di rendering e aggiornamento camera/oggetti
             this.startRenderLoop();
 
             // Gestione resize della finestra
@@ -134,16 +138,52 @@ class ARManager {
     }
 
     /**
-     * Avvia il loop di rendering
+     * Avvia il loop di rendering e aggiornamento
      */
     startRenderLoop() {
         if (!this.engine) return;
         this.engine.runRenderLoop(() => {
             if (this.scene && this.scene.activeCamera) {
+                // Aggiorna l'orientamento della camera in base alla bussola
+                this.updateCameraOrientation();
+                // Aggiorna la posizione dell'oggetto se presente
+                // (Nota: l'oggetto viene aggiornato solo quando viene mostrato/selezionato)
+                // Se volessimo aggiornare costantemente tutti gli oggetti visibili,
+                // servirebbe una logica diversa qui.
+
                 this.scene.render();
             }
         });
-        this.app.log("Loop di rendering avviato.");
+        this.app.log("Loop di rendering e aggiornamento avviato.");
+    }
+
+    /**
+     * Aggiorna l'orientamento della camera AR in base alla bussola del dispositivo
+     */
+    updateCameraOrientation() {
+        if (!this.camera || !this.app.geoManager.currentOrientation) return;
+
+        const userHeading = this.app.geoManager.currentOrientation.alpha;
+        if (userHeading === null || userHeading === undefined) return;
+
+        // Converte l'angolo della bussola (0-360, clockwise, 0=Nord)
+        // in angolo alpha per ArcRotateCamera (radianti, counter-clockwise, 0=asse Z positivo)
+        // Aggiustamento potrebbe essere necessario a seconda dell'orientamento iniziale della camera
+        const headingRad = BABYLON.Tools.ToRadians(userHeading);
+        // L'alpha della ArcRotateCamera è 0 lungo Z+, aumenta CCW.
+        // La bussola è 0 per Nord (Z+), aumenta CW.
+        // Quindi camera.alpha = -headingRad (o 2*PI - headingRad)
+        // Aggiungiamo PI/2 perché la camera parte guardando lungo Z (alpha = -PI/2)
+        this.camera.alpha = -headingRad - Math.PI / 2;
+
+        // Potremmo anche voler regolare beta (inclinazione verticale) se disponibile
+        // const userTilt = this.app.geoManager.currentOrientation.beta;
+        // if (userTilt !== null) {
+        //     const tiltRad = BABYLON.Tools.ToRadians(userTilt);
+        //     // Beta della ArcRotateCamera è 0 all'equatore, PI/2 al polo nord.
+        //     // L'orientamento beta è 0 orizzontale, 90 verticale.
+        //     this.camera.beta = Math.PI / 2 - tiltRad;
+        // }
     }
 
     /**
@@ -401,14 +441,16 @@ class ARManager {
         const maxDistance = 20; // metri
         const clampedDistance = Math.min(distance, maxDistance);
         
-        // Converti la direzione da gradi a radianti
-        const bearingRad = (bearing * Math.PI) / 180;
-        
-        // Calcola la posizione relativa
+        // Converti la direzione (bearing rispetto a Nord) da gradi a radianti
+        const bearingRad = BABYLON.Tools.ToRadians(bearing);
+
+        // Calcola la posizione XZ dell'oggetto relativa all'utente (che consideriamo a 0,0)
+        // X positivo = Est, Z positivo = Nord
         const x = clampedDistance * Math.sin(bearingRad);
         const z = clampedDistance * Math.cos(bearingRad);
-        
-        // Aggiorna la posizione
+
+        // Aggiorna la posizione dell'oggetto nel mondo 3D
+        // L'utente è sempre all'origine (0,0,0) in questa visualizzazione semplificata
         this.arObject.position = new BABYLON.Vector3(x, 0, z);
         
         // L'orientamento dell'oggetto è stato impostato durante il placeVirtualObject
