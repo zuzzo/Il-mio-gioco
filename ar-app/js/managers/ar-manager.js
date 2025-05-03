@@ -76,8 +76,8 @@ class ARManager {
 
             // Imposta la texture video come sfondo diretto della scena
             this.scene.backgroundTexture = this.videoTexture;
-            // Iniziamo senza inversione, la applicheremo se necessario
-            // this.scene.backgroundTexture.vScale = -1;
+            // Invertiamo la scala verticale per correggere l'orientamento
+            this.scene.backgroundTexture.vScale = -1;
 
             // Avvia il loop di rendering e aggiornamento camera/oggetti
             this.startRenderLoop();
