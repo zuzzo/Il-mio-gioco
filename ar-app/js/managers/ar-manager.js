@@ -78,7 +78,7 @@ class ARManager {
             const backgroundLayer = new BABYLON.Layer("cameraBackgroundLayer", null, this.scene, true);
             backgroundLayer.texture = this.videoTexture;
             backgroundLayer.isBackground = true;
-            // backgroundLayer.texture.vScale = -1; // Decommenta SOLO se il video è sottosopra
+            backgroundLayer.texture.vScale = -1; // Correggiamo l'orientamento del video
 
             // Avvia il loop di rendering e aggiornamento camera/oggetti
             this.startRenderLoop();
@@ -145,6 +145,9 @@ class ARManager {
         if (!this.engine) return;
         this.engine.runRenderLoop(() => {
             if (this.scene && this.scene.activeCamera) {
+                // Forza la pulizia dei buffer per evitare ghosting/scie
+                this.engine.clear(this.scene.clearColor, true, true, true);
+
                 // Aggiorna l'orientamento della camera in base alla bussola
                 this.updateCameraOrientation();
                 // Aggiorna la posizione dell'oggetto piazzato correntemente, se esiste
@@ -166,6 +169,9 @@ class ARManager {
 
         const userHeading = this.app.geoManager.currentOrientation.alpha;
         if (userHeading === null || userHeading === undefined) return;
+
+        // Log per debug orientamento camera
+        // console.log(`DEBUG: Camera Orientation - User Heading (alpha): ${userHeading.toFixed(2)}`);
 
         // Converte l'angolo della bussola (0-360, clockwise, 0=Nord)
         // in angolo alpha per ArcRotateCamera (radianti, counter-clockwise, 0=asse Z positivo)
@@ -428,8 +434,11 @@ class ARManager {
      * @param {Object} objectData - Dati dell'oggetto
      */
     updateObjectPosition(objectData) {
-        if (!this.arObject || !this.app.geoManager.currentPosition) return;
-        
+        if (!this.arObject || !this.app.geoManager.currentPosition || !objectData || !objectData.position) {
+             // console.log("DEBUG: updateObjectPosition - Dati mancanti", { hasArObject: !!this.arObject, hasUserPos: !!this.app.geoManager.currentPosition, hasObjectData: !!objectData });
+             return;
+        }
+
         // Calcola posizione relativa
         const userPos = this.app.geoManager.currentPosition;
         const objectPos = objectData.position;
@@ -441,10 +450,10 @@ class ARManager {
             userPos.latitude, userPos.longitude,
             objectPos.latitude, objectPos.longitude
         );
-        const userHeading = this.app.geoManager.currentOrientation?.alpha || 0;
+        const userHeading = this.app.geoManager.currentOrientation?.alpha; // Può essere null
 
         // Limita la distanza massima per una migliore visualizzazione in AR
-        const maxDistance = 20; // metri
+        const maxDistance = 50; // Aumentiamo un po' la distanza massima
         const clampedDistance = Math.min(distance, maxDistance);
         
         // Converti la direzione (bearing rispetto a Nord) da gradi a radianti
@@ -463,8 +472,8 @@ class ARManager {
         const savedOrientationRad = BABYLON.Tools.ToRadians(this.savedObjectOrientation);
         this.arObject.rotation.y = -savedOrientationRad; // Negativo per coerenza con bussola
 
-        // Non logghiamo più qui, ma nel render loop se necessario
-        // this.app.log(`Oggetto aggiornato - Distanza: ${clampedDistance.toFixed(2)}m, Direzione: ${bearing.toFixed(1)}°`);
+        // Log per debug posizione oggetto
+        // console.log(`DEBUG: Object Position - User: ${userPos.latitude.toFixed(6)},${userPos.longitude.toFixed(6)} | Obj: ${objectPos.latitude.toFixed(6)},${objectPos.longitude.toFixed(6)} | Dist: ${distance.toFixed(2)} | Bearing: ${bearing.toFixed(2)} | Heading: ${userHeading?.toFixed(2)} | 3D Pos: ${x.toFixed(2)},${z.toFixed(2)}`);
     }
 
     /**
