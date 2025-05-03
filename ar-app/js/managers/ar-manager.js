@@ -14,6 +14,7 @@ class ARManager {
         this.arActive = false;
         this.imageAnchorEnabled = false;
         this.savedObjectOrientation = 0; // Angolo in gradi
+        this.currentPlacedObjectData = null; // Dati dell'oggetto piazzato attualmente visualizzato
     }
 
     /**
@@ -146,10 +147,10 @@ class ARManager {
             if (this.scene && this.scene.activeCamera) {
                 // Aggiorna l'orientamento della camera in base alla bussola
                 this.updateCameraOrientation();
-                // Aggiorna la posizione dell'oggetto se presente
-                // (Nota: l'oggetto viene aggiornato solo quando viene mostrato/selezionato)
-                // Se volessimo aggiornare costantemente tutti gli oggetti visibili,
-                // servirebbe una logica diversa qui.
+                // Aggiorna la posizione dell'oggetto piazzato correntemente, se esiste
+                if (this.currentPlacedObjectData && this.arObject) {
+                    this.updateObjectPosition(this.currentPlacedObjectData);
+                }
 
                 this.scene.render();
             }
@@ -203,13 +204,15 @@ class ARManager {
      */
     async updatePreviewObject(modelPath, scale, rotation) {
         if (!this.scene) return;
+        // Stiamo mostrando un'anteprima, non un oggetto piazzato
+        this.currentPlacedObjectData = null;
         try {
             // Rimuovi l'oggetto esistente se presente
             if (this.arObject) {
                 this.arObject.dispose();
                 this.arObject = null;
             }
-            
+
             // Mostra un cubo placeholder mentre il modello si carica
             const placeholder = BABYLON.MeshBuilder.CreateBox("placeholder", {
                 width: 0.2, height: 0.2, depth: 0.2
@@ -326,13 +329,15 @@ class ARManager {
      */
     async showPlacedObject(objectData) {
         if (!this.scene || !this.app.geoManager.currentPosition) return;
+        // Memorizza i dati dell'oggetto che stiamo mostrando
+        this.currentPlacedObjectData = objectData;
         try {
             // Rimuovi l'oggetto esistente se presente
             if (this.arObject) {
                 this.arObject.dispose();
                 this.arObject = null;
             }
-            
+
             // Salva l'orientamento dell'oggetto
             this.savedObjectOrientation = objectData.rotation;
             
@@ -361,11 +366,11 @@ class ARManager {
                 // Applica la rotazione basata sull'orientamento salvato
                 const orientationRadians = (this.savedObjectOrientation * Math.PI) / 180;
                 this.arObject.rotation = new BABYLON.Vector3(0, -orientationRadians, 0);
-                
-                // Aggiorna la posizione in base alla geolocalizzazione
-                this.updateObjectPosition(objectData);
-                
-                this.app.log(`Oggetto ${objectData.name} posizionato con orientamento: ${this.savedObjectOrientation.toFixed(1)}°`);
+
+                // La posizione verrà aggiornata continuamente dal render loop
+                // this.updateObjectPosition(objectData); // Non più necessario chiamarla qui
+
+                this.app.log(`Oggetto ${objectData.name} caricato con orientamento: ${this.savedObjectOrientation.toFixed(1)}°`);
             } catch (error) {
                 this.app.log(`Errore caricamento modello: ${error.message}. Usando fallback.`);
                 
@@ -399,21 +404,22 @@ class ARManager {
                 // Applica la rotazione basata sull'orientamento salvato
                 const orientationRadians = (this.savedObjectOrientation * Math.PI) / 180;
                 this.arObject.rotation = new BABYLON.Vector3(0, -orientationRadians, 0);
-                
-                // Aggiorna la posizione in base alla geolocalizzazione
-                this.updateObjectPosition(objectData);
-                
+
+                // La posizione verrà aggiornata continuamente dal render loop
+                // this.updateObjectPosition(objectData); // Non più necessario chiamarla qui
+
                 this.app.showMessage("Usando un oggetto semplificato. Nell'app finale verranno mostrati i modelli 3D completi.");
             }
         } catch (error) {
             console.error(`Errore nel mostrare l'oggetto piazzato ${objectData.name}:`, error);
             this.app.log(`Errore visualizzazione oggetto ${objectData.name}: ${error.message}`);
             this.app.showMessage(`Impossibile visualizzare l'oggetto ${objectData.name}.`);
-            
+            // Resetta i dati dell'oggetto corrente in caso di errore
             if (this.arObject) {
                 this.arObject.dispose();
                 this.arObject = null;
             }
+            this.currentPlacedObjectData = null;
         }
     }
 
@@ -453,10 +459,12 @@ class ARManager {
         // L'utente è sempre all'origine (0,0,0) in questa visualizzazione semplificata
         this.arObject.position = new BABYLON.Vector3(x, 0, z);
         
-        // L'orientamento dell'oggetto è stato impostato durante il placeVirtualObject
-        // basato sull'orientamento del dispositivo al momento del posizionamento
-        
-        this.app.log(`Oggetto aggiornato - Distanza: ${clampedDistance.toFixed(2)}m, Direzione: ${bearing.toFixed(1)}°`);
+        // Applica l'orientamento salvato dell'oggetto (rotazione attorno a Y)
+        const savedOrientationRad = BABYLON.Tools.ToRadians(this.savedObjectOrientation);
+        this.arObject.rotation.y = -savedOrientationRad; // Negativo per coerenza con bussola
+
+        // Non logghiamo più qui, ma nel render loop se necessario
+        // this.app.log(`Oggetto aggiornato - Distanza: ${clampedDistance.toFixed(2)}m, Direzione: ${bearing.toFixed(1)}°`);
     }
 
     /**
