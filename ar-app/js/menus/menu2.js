@@ -40,6 +40,9 @@ class Menu2 {
      * Inizializza il menu
      */
     init() {
+        // Popola il menu a tendina con i modelli disponibili
+        this.populateModelDropdown();
+        
         // Aggiungi event listeners
         this.objectSelect.addEventListener('change', this.onObjectSelectChange);
         this.customModelInput.addEventListener('change', this.onCustomModelInput);
@@ -55,6 +58,35 @@ class Menu2 {
             this.selectedModelPath = this.objectSelect.value;
             this.onObjectSelectChange();
         }
+    }
+    
+    /**
+     * Popola il menu a tendina con i modelli disponibili
+     */
+    populateModelDropdown() {
+        if (!this.objectSelect) {
+            console.error("Elemento select 'object-select' non trovato.");
+            return;
+        }
+        
+        // Pulisci opzioni esistenti
+        this.objectSelect.innerHTML = '';
+        
+        // Verifica che window.availableModels esista
+        if (!window.availableModels || !Array.isArray(window.availableModels)) {
+            console.error("window.availableModels non è definito o non è un array.");
+            return;
+        }
+        
+        // Aggiungi le opzioni dei modelli
+        window.availableModels.forEach(model => {
+            const option = document.createElement('option');
+            option.value = model.path;
+            option.textContent = model.name;
+            this.objectSelect.appendChild(option);
+        });
+        
+        console.log(`Dropdown popolato con ${window.availableModels.length} modelli.`);
     }
     
     /**
@@ -103,8 +135,11 @@ class Menu2 {
     onObjectSelectChange() {
         this.selectedModelPath = this.objectSelect.value;
         
+        // Trova il modello selezionato
+        const selectedModel = window.availableModels.find(model => model.path === this.selectedModelPath);
+        
         // Mostra/nascondi l'input file per modelli personalizzati
-        if (this.selectedModelPath === 'custom') {
+        if (selectedModel && selectedModel.type === 'custom') {
             this.fileUploadDiv.classList.remove('hidden');
         } else {
             this.fileUploadDiv.classList.add('hidden');
@@ -151,9 +186,14 @@ class Menu2 {
      * Aggiorna la preview dell'oggetto
      */
     updatePreview() {
+        // Trova il modello selezionato
+        const selectedModel = window.availableModels.find(model => model.path === this.selectedModelPath);
+        
         // Determina quale modello usare
         let modelToUse = this.selectedModelPath;
-        if (this.selectedModelPath === 'custom' && this.customModelUrl) {
+        
+        // Se è un modello personalizzato, usa l'URL del file caricato
+        if (selectedModel && selectedModel.type === 'custom' && this.customModelUrl) {
             modelToUse = this.customModelUrl;
         }
         
@@ -173,18 +213,22 @@ class Menu2 {
             return;
         }
         
+        // Trova il modello selezionato
+        const selectedModel = window.availableModels.find(model => model.path === this.selectedModelPath);
+        
         // Determina quale modello usare
         let modelToUse = this.selectedModelPath;
         let modelName = this.getModelName();
         
-        if (this.selectedModelPath === 'custom' && this.customModelUrl) {
+        // Se è un modello personalizzato, usa l'URL del file caricato
+        if (selectedModel && selectedModel.type === 'custom' && this.customModelUrl) {
             modelToUse = this.customModelUrl;
         }
         
         // Crea l'oggetto da salvare
         const object = {
             modelPath: this.selectedModelPath,
-            isCustomModel: this.selectedModelPath === 'custom',
+            isCustomModel: selectedModel && selectedModel.type === 'custom',
             position: {...this.app.geoManager.currentPosition},
             orientation: this.app.geoManager.currentOrientation ? 
                 {...this.app.geoManager.currentOrientation} : null,
@@ -235,14 +279,15 @@ class Menu2 {
      * Ottiene un nome leggibile per il modello
      */
     getModelName() {
+        // Trova il modello selezionato
+        const selectedModel = window.availableModels.find(model => model.path === this.selectedModelPath);
+        
         // Se è un modello personalizzato
-        if (this.selectedModelPath === 'custom' && this.customModelInput.files[0]) {
+        if (selectedModel && selectedModel.type === 'custom' && this.customModelInput.files[0]) {
             return this.customModelInput.files[0].name.replace('.glb', '').replace('.gltf', '');
         }
         
-        // Cerca nei modelli disponibili
-        const selectedModel = window.availableModels.find(model => model.path === this.selectedModelPath);
-        
+        // Se è un modello predefinito
         if (selectedModel) {
             return selectedModel.name;
         }

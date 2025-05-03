@@ -9,16 +9,33 @@
     // Ogni oggetto nell'array rappresenta un modello disponibile.
     // 'name' è il nome visualizzato nel menu a tendina.
     // 'path' è il percorso relativo al file del modello 3D (.glb o .gltf).
+    // 'type' indica se è un modello predefinito o personalizzato
     const models = [
-        { name: "Tesoro", path: "assets/models/treasure.glb" },
-        { name: "Chiave", path: "assets/models/key.glb" },
-        { name: "Porta", path: "assets/models/door.glb" },
+        { 
+            name: "Tesoro", 
+            path: "assets/models/treasure.glb",
+            type: "predefined"
+        },
+        { 
+            name: "Chiave", 
+            path: "assets/models/key.glb",
+            type: "predefined"
+        },
+        { 
+            name: "Porta", 
+            path: "assets/models/door.glb",
+            type: "predefined"
+        },
         // Aggiungi qui altri modelli predefiniti se necessario
-        // Esempio: { name: "Sfera", path: "assets/models/sphere.glb" },
-        // Esempio: { name: "Cubo", path: "assets/models/cube.glb" },
+        // Esempio: { name: "Sfera", path: "assets/models/sphere.glb", type: "predefined" },
+        // Esempio: { name: "Cubo", path: "assets/models/cube.glb", type: "predefined" },
 
         // Opzione speciale per caricare un modello personalizzato dall'utente
-        { name: "Carica modello...", path: "assets/models/custom.glb" } // Usa un path fittizio per identificarlo
+        { 
+            name: "Carica modello...", 
+            path: "custom",
+            type: "custom"
+        }
     ];
 
     // Assegna l'array alla variabile globale `window.availableModels`

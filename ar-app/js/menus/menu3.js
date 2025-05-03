@@ -7,9 +7,6 @@ class Menu3 {
         this.menuElement = document.getElementById('menu3');
         this.mapContainer = document.getElementById('map-container');
         this.selectedObjectName = document.getElementById('selected-object-name');
-        this.centerMapBtn = document.getElementById('center-map-btn');
-        this.zoomInBtn = document.getElementById('zoom-in-btn');
-        this.zoomOutBtn = document.getElementById('zoom-out-btn');
         this.deleteObjectBtn = document.getElementById('delete-object-btn');
         this.drawAreaBtn = document.getElementById('draw-area-btn');
         this.backBtn = document.getElementById('back-menu1-from-map-btn');
@@ -31,13 +28,86 @@ class Menu3 {
     }
 
     init() {
-        this.centerMapBtn.addEventListener('click', this.onCenterMapClick);
-        this.zoomInBtn.addEventListener('click', this.onZoomInClick);
-        this.zoomOutBtn.addEventListener('click', this.onZoomOutClick);
+        // Setup touch gestures
+        this.mapContainer.addEventListener('touchstart', this.handleTouchStart.bind(this), {passive: false});
+        this.mapContainer.addEventListener('touchmove', this.handleTouchMove.bind(this), {passive: false});
+        this.mapContainer.addEventListener('touchend', this.handleTouchEnd.bind(this));
+        
+        // Setup mouse events
+        this.mapContainer.addEventListener('click', this.handleMouseClick.bind(this));
+        
         this.deleteObjectBtn.addEventListener('click', this.onDeleteObjectClick);
         this.drawAreaBtn.addEventListener('click', this.onDrawAreaClick);
         this.backBtn.addEventListener('click', this.onBackClick);
         this.deleteObjectBtn.disabled = true;
+    }
+    
+    handleMouseClick(e) {
+        // Se siamo in modalità disegno, aggiungi un punto
+        if (this.gameAreaManager?.drawing) {
+            e.stopPropagation(); // Previeni altri handler
+            
+            const rect = this.mapContainer.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            const latlng = this.map.containerPointToLatLng(
+                L.point(x, y)
+            );
+            
+            this.gameAreaManager.addPointToPolygon(latlng);
+            return false;
+        }
+    }
+
+    handleTouchStart(e) {
+        if (e.touches.length === 1) {
+            this.touchStart = {
+                x: e.touches[0].clientX,
+                y: e.touches[0].clientY,
+                time: Date.now()
+            };
+        }
+    }
+
+    handleTouchMove(e) {
+        if (!this.touchStart || e.touches.length !== 1) return;
+        e.preventDefault();
+    }
+
+    handleTouchEnd(e) {
+        if (!this.touchStart) return;
+        
+        const touchEnd = {
+            x: e.changedTouches[0].clientX,
+            y: e.changedTouches[0].clientY,
+            time: Date.now()
+        };
+
+        const dx = touchEnd.x - this.touchStart.x;
+        const dy = touchEnd.y - this.touchStart.y;
+        const distance = Math.sqrt(dx*dx + dy*dy);
+        const duration = touchEnd.time - this.touchStart.time;
+
+        // Single tap
+        if (distance < 10 && duration < 500) {
+            this.handleSingleTap(touchEnd);
+        }
+
+        this.touchStart = null;
+    }
+
+    handleSingleTap(touchPos) {
+        if (this.gameAreaManager?.drawing) {
+            const rect = this.mapContainer.getBoundingClientRect();
+            const x = touchPos.x - rect.left;
+            const y = touchPos.y - rect.top;
+            
+            const latlng = this.map.containerPointToLatLng(
+                L.point(x, y)
+            );
+            this.gameAreaManager.addPointToPolygon(latlng);
+        }
     }
 
     show() {
@@ -76,7 +146,12 @@ class Menu3 {
             });
 
             this.userMarker = L.marker([position.latitude, position.longitude], { icon: userIcon }).addTo(this.map);
-            this.map.on('click', () => this.deselectObject());
+            this.map.on('click', (e) => {
+                // Solo se non siamo in modalità disegno
+                if (!this.gameAreaManager?.drawing) {
+                    this.deselectObject();
+                }
+            });
             
             this.gameAreaManager = new GameAreaManager(this.map);
             this.mapInitialized = true;
@@ -201,7 +276,7 @@ class Menu3 {
         } else {
             this.gameAreaManager.enableDrawing();
             this.drawAreaBtn.textContent = "Annulla disegno";
-            this.app.showMessage("Disegna l'area di gioco sulla mappa. Chiudi la forma cliccando sul primo punto.");
+            this.app.showMessage("Disegna l'area di gioco toccando la mappa. Premi 'Conferma Area' quando hai finito.");
         }
     }
 
@@ -218,32 +293,20 @@ class GameAreaManager {
         this.areaLayer = null;
         this.drawnItems = new L.FeatureGroup();
         this.map.addLayer(this.drawnItems);
-        
-        this.drawControl = new L.Control.Draw({
-            draw: {
-                polygon: {
-                    shapeOptions: {
-                        color: '#2e8b57',
-                        fillOpacity: 0.3
-                    },
-                    allowIntersection: false,
-                    drawError: {
-                        color: '#ff0000',
-                        message: 'Il poligono non può intersecarsi'
-                    },
-                    closeOnClick: true,
-                    minimumPoints: 3
-                },
-                polyline: false,
-                rectangle: false,
-                circle: false,
-                marker: false
-            }
-        });
+        this.points = [];
+        this.tempLine = null;
+        this.polygonStyle = {
+            color: '#2e8b57',
+            weight: 3,
+            opacity: 0.8,
+            fillOpacity: 0.3
+        };
     }
 
     enableDrawing() {
         this.drawing = true;
+        this.points = [];
+        
         // Disable map interactions
         this.map.dragging.disable();
         this.map.touchZoom.disable();
@@ -253,13 +316,14 @@ class GameAreaManager {
         this.map.keyboard.disable();
         this.map._container.style.cursor = 'crosshair';
         
-        // Enable drawing controls
-        this.map.addControl(this.drawControl);
-        this.map.on('draw:created', this.onDrawComplete, this);
+        // Aggiungi pulsante di conferma
+        this.addConfirmButton();
     }
 
     disableDrawing() {
         this.drawing = false;
+        this.points = [];
+        
         // Re-enable map interactions
         this.map.dragging.enable();
         this.map.touchZoom.enable();
@@ -269,30 +333,101 @@ class GameAreaManager {
         this.map.keyboard.enable();
         this.map._container.style.cursor = '';
         
-        // Remove drawing controls
-        this.map.removeControl(this.drawControl);
-        this.map.off('draw:created', this.onDrawComplete, this);
+        // Rimuovi pulsante di conferma
+        this.removeConfirmButton();
+        
+        // Rimuovi linea temporanea
+        if (this.tempLine) {
+            this.map.removeLayer(this.tempLine);
+            this.tempLine = null;
+        }
+    }
+    
+    addConfirmButton() {
+        // Crea pulsante di conferma
+        this.confirmButton = L.control({position: 'bottomright'});
+        this.confirmButton.onAdd = () => {
+            const div = L.DomUtil.create('div', 'confirm-area-button');
+            div.innerHTML = '<button style="padding: 10px; background-color: #2e8b57; color: white; border: none; border-radius: 5px; cursor: pointer;">Conferma Area</button>';
+            L.DomEvent.on(div, 'click', L.DomEvent.stop);
+            L.DomEvent.on(div, 'click', () => this.completePolygon());
+            return div;
+        };
+        this.confirmButton.addTo(this.map);
+    }
+    
+    removeConfirmButton() {
+        if (this.confirmButton) {
+            this.confirmButton.remove();
+            this.confirmButton = null;
+        }
     }
 
-    onDrawComplete(e) {
-        const layer = e.layer;
-        const polygon = layer.toGeoJSON();
+    addPointToPolygon(latlng) {
+        if (!this.drawing) return;
         
-        if (polygon.geometry.coordinates[0].length < 3) {
-            alert('Devi disegnare almeno 3 punti per formare un poligono');
-            return;
+        // Aggiungi punto
+        this.points.push(latlng);
+        
+        // Aggiorna visualizzazione
+        this.updatePolygonPreview();
+        
+        // Feedback visivo
+        L.circleMarker(latlng, {
+            radius: 5,
+            color: '#2e8b57',
+            fillColor: '#2e8b57',
+            fillOpacity: 1
+        }).addTo(this.drawnItems);
+    }
+    
+    updatePolygonPreview() {
+        // Rimuovi linea temporanea precedente
+        if (this.tempLine) {
+            this.map.removeLayer(this.tempLine);
         }
         
-        if (turf.booleanCrosses(polygon, polygon)) {
-            alert('Il poligono non può intersecarsi');
-            return;
+        // Crea nuova linea temporanea
+        if (this.points.length > 1) {
+            this.tempLine = L.polyline(this.points, this.polygonStyle).addTo(this.map);
         }
-        
-        this.drawnItems.clearLayers();
-        this.drawnItems.addLayer(layer);
-        this.areaLayer = layer;
-        this.disableDrawing();
-        localStorage.setItem('gameArea', JSON.stringify(polygon));
+    }
+    
+    completePolygon() {
+        try {
+            // Verifica numero minimo di punti
+            if (this.points.length < 3) {
+                alert('Devi disegnare almeno 3 punti per formare un poligono valido');
+                return;
+            }
+            
+            // Crea poligono
+            const polygon = L.polygon(this.points, this.polygonStyle);
+            
+            // Converti in GeoJSON
+            const geoJson = {
+                type: 'Feature',
+                geometry: {
+                    type: 'Polygon',
+                    coordinates: [this.points.map(p => [p.lng, p.lat])]
+                }
+            };
+            
+            // Salva poligono
+            this.drawnItems.clearLayers();
+            this.drawnItems.addLayer(polygon);
+            this.areaLayer = polygon;
+            
+            // Salva in localStorage
+            localStorage.setItem('gameArea', JSON.stringify(geoJson));
+            
+            // Disabilita modalità disegno
+            this.disableDrawing();
+            
+        } catch (error) {
+            console.error('Errore nel salvataggio area:', error);
+            alert("Errore durante il salvataggio dell'area");
+        }
     }
 
     isInsideArea(lat, lng) {

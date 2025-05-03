@@ -31,18 +31,19 @@ class ARManager {
             this.scene = new BABYLON.Scene(this.engine);
             this.scene.clearColor = new BABYLON.Color4(0, 0, 0, 0); // Trasparente
 
-            // Configura la camera
+            // Configura la camera con parametri ottimizzati
             this.camera = new BABYLON.ArcRotateCamera(
                 "ARcamera",
                 -Math.PI / 2,
                 Math.PI / 2,
-                5,
+                3, // Distanza iniziale ridotta
                 BABYLON.Vector3.Zero(),
                 this.scene
             );
             this.camera.attachControl(canvas, true);
-            this.camera.lowerRadiusLimit = 0.1;
+            this.camera.lowerRadiusLimit = 1; // Limite minimo aumentato
             this.camera.upperRadiusLimit = 10;
+            this.camera.inertia = 0.5; // Riduce l'inerzia per un controllo più diretto
 
             // Configura l'illuminazione
             const light = new BABYLON.HemisphericLight(
@@ -63,25 +64,16 @@ class ARManager {
                 true
             );
 
-            // Crea un piano per visualizzare il video come sfondo
-            const plane = BABYLON.MeshBuilder.CreatePlane(
-                "videoPlane",
-                {width: 10, height: 5.625}, // Assuming 16:9 aspect ratio
-                this.scene
-            );
-            // Position the plane far enough so it acts as a background
-            // Adjust based on camera setup if needed
-            plane.position = this.camera.position.add(new BABYLON.Vector3(0, 0, this.camera.radius + 1));
-            plane.rotation.y = Math.PI; // Rotate to face the camera
-            plane.parent = this.camera; // Attach to camera so it always stays behind
-
-            const mat = new BABYLON.StandardMaterial("videoMat", this.scene);
-            mat.diffuseTexture = this.videoTexture;
-            mat.emissiveColor = new BABYLON.Color3(1, 1, 1); // Make it emissive to show video colors
-            mat.specularColor = new BABYLON.Color3(0, 0, 0);
-            mat.disableLighting = true;
-            mat.backFaceCulling = false; // Render both sides
-            plane.material = mat;
+            // Rimuoviamo il piano video per evitare la doppia visualizzazione
+            // Utilizziamo solo l'elemento video HTML diretto
+            
+            // Creiamo un materiale trasparente per il background
+            const clearMaterial = new BABYLON.StandardMaterial("clearMat", this.scene);
+            clearMaterial.alpha = 0;
+            clearMaterial.disableLighting = true;
+            
+            // Impostiamo lo sfondo della scena come trasparente
+            this.scene.clearColor = new BABYLON.Color4(0, 0, 0, 0);
 
             // Configura fotocamera
             await this.setupCamera(video);
@@ -186,6 +178,26 @@ class ARManager {
                 this.virtualObject.dispose();
                 this.virtualObject = null;
             }
+            
+            // Gestione speciale per modelli personalizzati (blob URLs)
+            if (modelPath.startsWith("blob:")) {
+                this.app.log(`Caricamento anteprima da Blob URL`);
+                
+                try {
+                    // Carica direttamente dal blob URL
+                    const result = await BABYLON.SceneLoader.ImportMeshAsync(
+                        null, // Nomi mesh (null per tutti)
+                        "", // Nessun rootUrl per blob
+                        modelPath,
+                        this.scene
+                    );
+                    
+                    this.processLoadedModel(result, scale, rotation);
+                    return;
+                } catch (error) {
+                    throw new Error(`Errore caricamento modello personalizzato: ${error.message}`);
+                }
+            }
 
             // Determina la root URL per il caricamento
             let rootUrl = "";
@@ -205,11 +217,12 @@ class ARManager {
 
             this.app.log(`Caricamento anteprima: ${fileName} da ${rootUrl || 'Blob URL'}`);
 
-            // Carica il modello 3D
+            // Carica il modello 3D usando l'approccio della versione alfa
+            // che funzionava senza problemi CORS
             const result = await BABYLON.SceneLoader.ImportMeshAsync(
-                null, // Nomi mesh (null per tutti)
-                rootUrl,
-                fileName,
+                "", // Nomi mesh (stringa vuota per tutti)
+                "", // rootUrl vuoto
+                modelPath, // Percorso completo
                 this.scene
             );
 
@@ -248,14 +261,54 @@ class ARManager {
 
         } catch (error) {
             console.error("Errore nell'aggiornamento dell'oggetto di anteprima:", error);
-            this.app.log(`Errore anteprima: ${error.message}`);
-            this.app.showMessage(`Errore caricamento anteprima: ${error.message}`);
+            
+            // Gestione degli errori di caricamento
+            if (error.message && (error.message.includes("CORS") || error.message.includes("Unable to load") || error.message.includes("LoadFileError"))) {
+                this.app.log(`Errore caricamento modello: ${error.message}. Creazione oggetto fallback per l'anteprima.`);
+                
+                // Crea un cubo colorato come fallback per l'anteprima
+                this.createPreviewFallbackObject(modelPath, scale, rotation);
+                return;
+            } else {
+                this.app.log(`Errore anteprima: ${error.message}`);
+                this.app.showMessage(`Errore caricamento anteprima: ${error.message}`);
+            }
+            
             // Assicurati che l'oggetto venga rimosso in caso di errore
-             if (this.previewObject) {
+            if (this.previewObject) {
                 this.previewObject.dispose();
                 this.previewObject = null;
             }
         }
+    }
+    
+    /**
+     * Elabora un modello 3D caricato
+     * @private
+     * @param {Object} result - Risultato del caricamento del modello
+     * @param {number} scale - Scala dell'oggetto
+     * @param {number} rotation - Rotazione dell'oggetto in gradi (asse Y)
+     */
+    processLoadedModel(result, scale, rotation) {
+        if (!result.meshes || result.meshes.length === 0) {
+            throw new Error("Il modello caricato non contiene mesh.");
+        }
+
+        // Trova il root mesh (spesso il primo o uno chiamato __root__)
+        const rootMesh = result.meshes[0];
+
+        // Crea un parent vuoto per controllare posizione/rotazione/scala
+        this.previewObject = new BABYLON.TransformNode("previewParent", this.scene);
+        rootMesh.parent = this.previewObject;
+
+        // Posiziona l'oggetto davanti alla camera
+        const previewDistance = 2;
+        const forwardDirection = this.camera.getDirection(BABYLON.Vector3.Forward());
+        this.previewObject.position = this.camera.position.add(forwardDirection.scale(previewDistance));
+
+        // Applica scala e rotazione
+        this.previewObject.scaling = new BABYLON.Vector3(scale, scale, scale);
+        this.previewObject.rotation = new BABYLON.Vector3(0, BABYLON.Tools.ToRadians(rotation), 0);
     }
 
     /**
@@ -274,6 +327,24 @@ class ARManager {
              if (this.virtualObject) {
                  this.virtualObject.dispose();
                  this.virtualObject = null;
+             }
+             
+             // Gestione speciale per modelli personalizzati (blob URLs)
+             if (objectData.isCustomModel && objectData.modelPath.startsWith("blob:")) {
+                 this.app.log(`Caricamento oggetto piazzato da Blob URL`);
+                 try {
+                     const result = await BABYLON.SceneLoader.ImportMeshAsync(
+                         null, // Nomi mesh (null per tutti)
+                         "", // Nessun rootUrl per blob
+                         objectData.modelPath,
+                         this.scene
+                     );
+                     
+                     this.processPlacedObject(result, objectData);
+                     return;
+                 } catch (error) {
+                     throw new Error(`Errore caricamento modello personalizzato: ${error.message}`);
+                 }
              }
 
              // Calcola posizione relativa (esempio molto semplificato)
@@ -318,20 +389,30 @@ class ARManager {
              }
 
 
-             const result = await BABYLON.SceneLoader.ImportMeshAsync(null, rootUrl, fileName, this.scene);
-             if (!result.meshes || result.meshes.length === 0) {
-                 throw new Error("Modello oggetto piazzato non contiene mesh.");
+             try {
+                 // Usa l'approccio della versione alfa che funzionava senza problemi CORS
+                 const result = await BABYLON.SceneLoader.ImportMeshAsync(
+                     "", // Nomi mesh (stringa vuota per tutti)
+                     "", // rootUrl vuoto
+                     objectData.modelPath, // Percorso completo
+                     this.scene
+                 );
+                 
+                 // Usa il metodo comune per elaborare l'oggetto
+                 this.processPlacedObject(result, objectData, x, y, z);
+                 
+             } catch (error) {
+                 // Gestione degli errori di caricamento
+                 if (error.message && (error.message.includes("CORS") || error.message.includes("Unable to load") || error.message.includes("LoadFileError"))) {
+                     this.app.log(`Errore caricamento modello: ${error.message}. Creazione oggetto fallback.`);
+                     this.app.showMessage("Usando un oggetto semplificato. Nell'app finale verranno mostrati i modelli 3D completi.");
+                     
+                     // Fallback: crea un cubo colorato come nella versione alfa
+                     this.createFallbackObject(objectData, x, y, z);
+                     return;
+                 }
+                 throw error;
              }
-             const rootMesh = result.meshes[0];
-
-             this.virtualObject = new BABYLON.TransformNode(`placed_${objectData.id || Date.now()}`, this.scene);
-             rootMesh.parent = this.virtualObject;
-
-             // Applica posizione, rotazione, scala
-             this.virtualObject.position = new BABYLON.Vector3(x, y, z);
-             this.virtualObject.scaling = new BABYLON.Vector3(objectData.scale, objectData.scale, objectData.scale);
-             // Applica la rotazione salvata (assumendo sia sull'asse Y rispetto al mondo)
-             this.virtualObject.rotation = new BABYLON.Vector3(0, BABYLON.Tools.ToRadians(objectData.rotation), 0);
 
 
          } catch (error) {
@@ -343,6 +424,33 @@ class ARManager {
                  this.virtualObject = null;
              }
          }
+    }
+    
+    /**
+     * Elabora un oggetto piazzato nel mondo AR
+     * @private
+     * @param {Object} result - Risultato del caricamento del modello
+     * @param {Object} objectData - Dati dell'oggetto
+     * @param {number} x - Posizione X
+     * @param {number} y - Posizione Y
+     * @param {number} z - Posizione Z
+     */
+    processPlacedObject(result, objectData, x = 0, y = 0, z = 0) {
+        if (!result.meshes || result.meshes.length === 0) {
+            throw new Error("Il modello caricato non contiene mesh.");
+        }
+        
+        // Trova il root mesh
+        const rootMesh = result.meshes[0];
+        
+        // Crea un parent vuoto per controllare posizione/rotazione/scala
+        this.virtualObject = new BABYLON.TransformNode(`placed_${objectData.id || Date.now()}`, this.scene);
+        rootMesh.parent = this.virtualObject;
+        
+        // Applica posizione, rotazione, scala
+        this.virtualObject.position = new BABYLON.Vector3(x, y, z);
+        this.virtualObject.scaling = new BABYLON.Vector3(objectData.scale, objectData.scale, objectData.scale);
+        this.virtualObject.rotation = new BABYLON.Vector3(0, BABYLON.Tools.ToRadians(objectData.rotation), 0);
     }
 
 
@@ -360,4 +468,110 @@ class ARManager {
         // Qui si potrebbe avviare/fermare il tracking di immagini se fosse implementato
     }
 
+    /**
+     * Crea un oggetto fallback (cubo colorato) quando non è possibile caricare il modello
+     * @private
+     * @param {Object} objectData - Dati dell'oggetto
+     * @param {number} x - Posizione X
+     * @param {number} y - Posizione Y
+     * @param {number} z - Posizione Z
+     */
+    createFallbackObject(objectData, x = 0, y = 0, z = 0) {
+        // Crea un cubo come fallback
+        const fallbackMesh = BABYLON.MeshBuilder.CreateBox("fallback", {
+            width: 0.5, 
+            height: 0.5, 
+            depth: 0.5
+        }, this.scene);
+        
+        // Crea un materiale colorato
+        const material = new BABYLON.StandardMaterial("fallbackMaterial", this.scene);
+        
+        // Scegli il colore in base al tipo di oggetto
+        if (objectData.modelPath.includes("treasure")) {
+            material.diffuseColor = new BABYLON.Color3(1, 0.84, 0); // Oro
+            material.emissiveColor = new BABYLON.Color3(0.5, 0.4, 0);
+        } else if (objectData.modelPath.includes("key")) {
+            material.diffuseColor = new BABYLON.Color3(0.75, 0.75, 0.75); // Argento
+            material.emissiveColor = new BABYLON.Color3(0.3, 0.3, 0.3);
+        } else if (objectData.modelPath.includes("door")) {
+            material.diffuseColor = new BABYLON.Color3(0.55, 0.27, 0.07); // Marrone
+            material.emissiveColor = new BABYLON.Color3(0.2, 0.1, 0);
+        } else {
+            material.diffuseColor = new BABYLON.Color3(1, 0, 0); // Rosso di default
+            material.emissiveColor = new BABYLON.Color3(0.5, 0, 0);
+        }
+        
+        fallbackMesh.material = material;
+        
+        // Crea un parent vuoto per controllare posizione/rotazione/scala
+        this.virtualObject = new BABYLON.TransformNode(`placed_${objectData.id || Date.now()}`, this.scene);
+        fallbackMesh.parent = this.virtualObject;
+        
+        // Applica posizione, rotazione, scala
+        this.virtualObject.position = new BABYLON.Vector3(x, y, z);
+        this.virtualObject.scaling = new BABYLON.Vector3(objectData.scale, objectData.scale, objectData.scale);
+        this.virtualObject.rotation = new BABYLON.Vector3(0, BABYLON.Tools.ToRadians(objectData.rotation), 0);
+        
+        this.app.log(`Creato oggetto fallback per ${objectData.name}`);
+    }
+    /**
+     * Crea un oggetto fallback per l'anteprima quando non è possibile caricare il modello
+     * @private
+     * @param {string} modelPath - Percorso del modello 3D
+     * @param {number} scale - Scala dell'oggetto
+     * @param {number} rotation - Rotazione dell'oggetto in gradi (asse Y)
+     */
+    createPreviewFallbackObject(modelPath, scale, rotation) {
+        // Rimuovi l'oggetto di anteprima esistente se presente
+        if (this.previewObject) {
+            this.previewObject.dispose();
+            this.previewObject = null;
+        }
+        
+        // Crea un cubo come fallback
+        const fallbackMesh = BABYLON.MeshBuilder.CreateBox("previewFallback", {
+            width: 0.5, 
+            height: 0.5, 
+            depth: 0.5
+        }, this.scene);
+        
+        // Crea un materiale colorato
+        const material = new BABYLON.StandardMaterial("previewFallbackMaterial", this.scene);
+        
+        // Scegli il colore in base al tipo di oggetto
+        if (modelPath.includes("treasure")) {
+            material.diffuseColor = new BABYLON.Color3(1, 0.84, 0); // Oro
+            material.emissiveColor = new BABYLON.Color3(0.5, 0.4, 0);
+        } else if (modelPath.includes("key")) {
+            material.diffuseColor = new BABYLON.Color3(0.75, 0.75, 0.75); // Argento
+            material.emissiveColor = new BABYLON.Color3(0.3, 0.3, 0.3);
+        } else if (modelPath.includes("door")) {
+            material.diffuseColor = new BABYLON.Color3(0.55, 0.27, 0.07); // Marrone
+            material.emissiveColor = new BABYLON.Color3(0.2, 0.1, 0);
+        } else {
+            material.diffuseColor = new BABYLON.Color3(1, 0, 0); // Rosso di default
+            material.emissiveColor = new BABYLON.Color3(0.5, 0, 0);
+        }
+        
+        // Aggiungi un po' di trasparenza per indicare che è un'anteprima
+        material.alpha = 0.7;
+        fallbackMesh.material = material;
+        
+        // Crea un parent vuoto per controllare posizione/rotazione/scala
+        this.previewObject = new BABYLON.TransformNode("previewParent", this.scene);
+        fallbackMesh.parent = this.previewObject;
+        
+        // Posiziona l'oggetto davanti alla camera
+        const previewDistance = 2;
+        const forwardDirection = this.camera.getDirection(BABYLON.Vector3.Forward());
+        this.previewObject.position = this.camera.position.add(forwardDirection.scale(previewDistance));
+        
+        // Applica scala e rotazione
+        this.previewObject.scaling = new BABYLON.Vector3(scale, scale, scale);
+        this.previewObject.rotation = new BABYLON.Vector3(0, BABYLON.Tools.ToRadians(rotation), 0);
+        
+        this.app.log(`Creato oggetto fallback per l'anteprima di ${modelPath}`);
+        this.app.showMessage("Usando un'anteprima semplificata. Nell'app finale verranno mostrati i modelli 3D completi.");
+    }
 } // Chiusura della classe ARManager
