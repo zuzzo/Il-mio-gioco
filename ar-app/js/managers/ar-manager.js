@@ -67,10 +67,13 @@ class ARManager {
             );
 
             // Impostiamo lo sfondo della scena come trasparente
-            this.scene.clearColor = new BABYLON.Color4(0, 0, 0, 0);
+            this.scene.clearColor = new BABYLON.Color4(0, 0, 0, 0); // Assicura trasparenza
 
             // Configura fotocamera
             await this.setupCamera(video);
+
+            // Non usiamo né Layer né backgroundTexture, ci affidiamo al CSS
+            // per mostrare il video dietro il canvas trasparente.
 
             // Avvia il loop di rendering
             this.startRenderLoop();
@@ -102,9 +105,8 @@ class ARManager {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({
                 video: {
-                    facingMode: 'environment', // Preferisci la fotocamera posteriore
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 }
+                    facingMode: 'environment' // Preferisci la fotocamera posteriore
+                    // Rimuoviamo le richieste specifiche di width/height
                 }
             });
 
