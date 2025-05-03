@@ -38,11 +38,11 @@ class App {
             this.showMessage("Errore: Geolocalizzazione non supportata o permessi negati.");
             // Potrebbe essere necessario gestire questo caso in modo più robusto
         }
-        // Chiama init di ARManager passando gli ID corretti e controlla il risultato
-        const arInitialized = await this.arManager.init('render-canvas', 'camera-feed');
+        // Chiama init di ARManager (ora basato su WebXR) passando solo l'ID del canvas
+        const arInitialized = await this.arManager.init('render-canvas');
         if (!arInitialized) {
-             this.showMessage("Errore critico: Impossibile inizializzare il sistema AR. Controlla i permessi della fotocamera e la console.");
-             this.log("Inizializzazione AR fallita.");
+             this.showMessage("Errore critico: Impossibile inizializzare il sistema AR (WebXR). Assicurati che il browser e il dispositivo siano compatibili e aggiornati.");
+             this.log("Inizializzazione AR (WebXR) fallita.");
              // Potremmo voler bloccare ulteriori inizializzazioni qui
              // return; // Decommenta se vuoi bloccare tutto in caso di fallimento AR
         } else {

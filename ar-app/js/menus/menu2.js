@@ -204,15 +204,15 @@ class Menu2 {
     }
     
     /**
-     * Gestisce il click sul pulsante "Piazza oggetto"
+     * Gestisce il click sul pulsante "Piazza oggetto" (Logica WebXR)
      */
-    onConfirmPlaceClick() {
-        // Verifica che la posizione sia disponibile
-        if (!this.app.geoManager.currentPosition) {
-            this.app.showMessage("Posizione non disponibile. Riprova più tardi.");
+    async onConfirmPlaceClick() {
+        // Verifica se l'hit-test è attivo e il marker è visibile
+        if (!this.app.arManager || !this.app.arManager.hitTestActive || !this.app.arManager.hitTestMarker || !this.app.arManager.hitTestMarker.isVisible) {
+            this.app.showMessage("Punta il dispositivo verso una superficie piana rilevata prima di piazzare l'oggetto.");
             return;
         }
-        
+
         // Trova il modello selezionato
         const selectedModel = window.availableModels.find(model => model.path === this.selectedModelPath);
         
@@ -235,14 +235,34 @@ class Menu2 {
             scale: this.objectScale,
             rotation: this.objectRotation,
             name: modelName
+            // NOTA: La posizione e l'orientamento GPS/Bussola non sono più usati
+            // direttamente per il piazzamento con WebXR/Hit-Test.
+            // Potremmo salvarli come riferimento, ma il posizionamento reale
+            // avviene nel mondo 3D rilevato da WebXR.
         };
-        
-        // Salva l'oggetto
-        const objectId = this.app.storageManager.addObject(object);
-        
-        // Conferma all'utente
-        this.app.showMessage(`Oggetto "${object.name}" posizionato con successo!`);
-        this.app.log(`Oggetto piazzato: ${object.name} a Lat: ${object.position.latitude.toFixed(6)}, Lng: ${object.position.longitude.toFixed(6)}`);
+
+        // Chiama la funzione di piazzamento dell'ARManager
+        const placedMesh = await this.app.arManager.placeObjectAtHitTest(modelToUse, this.objectScale, this.objectRotation);
+
+        if (placedMesh) {
+            // Ottieni la posizione e rotazione reali dal mesh piazzato
+            const position = placedMesh.position;
+            const rotation = placedMesh.rotationQuaternion ? placedMesh.rotationQuaternion.toEulerAngles() : placedMesh.rotation;
+
+            // TODO: Salvare l'oggetto nello storageManager con le coordinate WebXR
+            // Questo richiede di decidere come rappresentare/salvare le coordinate
+            // del mondo WebXR (che sono relative al punto di partenza della sessione).
+            // Per ora, logghiamo e mostriamo un messaggio.
+
+            this.app.showMessage(`Oggetto "${object.name}" piazzato con successo tramite WebXR!`);
+            this.app.log(`Oggetto piazzato (WebXR): ${object.name} a ${position.x.toFixed(2)}, ${position.y.toFixed(2)}, ${position.z.toFixed(2)}`);
+
+            // Potremmo voler "dimenticare" l'oggetto piazzato per permetterne altri
+            // this.app.arManager.arObject = null;
+        } else {
+             this.app.showMessage(`Errore durante il piazzamento dell'oggetto "${object.name}".`);
+             this.app.log(`Fallito piazzamento WebXR per: ${object.name}`);
+        }
         
         // Torna al menu principale
         this.hide();

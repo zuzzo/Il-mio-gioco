@@ -64,10 +64,12 @@ class Menu4 {
         // Aggiorna lo stato del toggle
         this.imageAnchorToggle.checked = this.app.arManager.imageAnchorEnabled;
         
-        // Carica gli oggetti nelle vicinanze
-        this.loadNearbyObjects();
+        // NOTA: La logica di esplorazione basata su GPS non è compatibile con WebXR Plane Detection.
+        // Mostriamo un messaggio all'utente.
+        this.app.showMessage("La modalità Esplora non è attualmente compatibile con la modalità AR avanzata.");
+        this.app.log("Menu 4 (Esplora) mostrato, ma funzionalità limitata in modalità WebXR.");
     }
-    
+
     /**
      * Resetta i valori dei controlli
      */
@@ -88,92 +90,41 @@ class Menu4 {
     }
     
     /**
-     * Carica gli oggetti nelle vicinanze
+     * Carica gli oggetti nelle vicinanze (Disabilitato per WebXR)
      */
     loadNearbyObjects() {
-        // Ottieni la posizione corrente
-        const currentPosition = this.app.geoManager.currentPosition;
-        
-        if (!currentPosition) {
-            this.app.showMessage("Posizione non disponibile. Riprova più tardi.");
-            return;
-        }
-        
-        // Ottieni gli oggetti nelle vicinanze
-        this.nearbyObjects = this.app.storageManager.getNearbyObjects(currentPosition, 1000);
-        
-        // Se ci sono oggetti, mostra il primo
-        if (this.nearbyObjects.length > 0) {
-            this.currentObjectIndex = 0;
-            this.showCurrentObject();
-        } else {
-            this.app.showMessage("Nessun oggetto nelle vicinanze da esplorare.");
-        }
+        this.app.log("loadNearbyObjects chiamato, ma non applicabile in modalità WebXR.");
+        // Non carichiamo/mostriamo oggetti basati su GPS qui
+        this.nearbyObjects = [];
     }
-    
+
     /**
-     * Mostra l'oggetto corrente
+     * Mostra l'oggetto corrente (Disabilitato per WebXR)
      */
     showCurrentObject() {
-        if (this.nearbyObjects.length === 0) return;
-        
-        const object = this.nearbyObjects[this.currentObjectIndex];
-        
-        // Calcola la direzione verso l'oggetto
-        const currentPosition = this.app.geoManager.currentPosition;
-        
-        if (!currentPosition) return;
-        
-        const bearing = this.app.geoManager.calculateBearing(
-            currentPosition.latitude,
-            currentPosition.longitude,
-            object.position.latitude,
-            object.position.longitude
-        );
-        
-        // Visualizza l'oggetto nell'AR
-        this.app.arManager.showPlacedObject(object);
-        
-        // Mostra informazioni sull'oggetto
-        this.app.showMessage(
-            `Oggetto ${this.currentObjectIndex + 1}/${this.nearbyObjects.length}: ` +
-            `"${object.name}" - Distanza: ${object.distance.toFixed(1)}m, ` +
-            `Direzione: ${bearing.toFixed(1)}°`
-        );
+         this.app.log("showCurrentObject chiamato, ma non applicabile in modalità WebXR.");
+         // Non mostriamo oggetti basati su GPS qui
     }
-    
+
     /**
-     * Gestisce il cambio di scala
+     * Gestisce il cambio di scala (Effetto limitato in WebXR senza oggetto selezionato)
      */
     onScaleChange() {
         this.objectScale = parseFloat(this.scaleSlider.value);
         this.scaleValue.textContent = this.objectScale.toFixed(1);
-        
-        // Aggiorna l'oggetto virtuale se presente
-        if (this.app.arManager.arObject && this.nearbyObjects.length > 0) {
-            this.app.arManager.arObject.scaling = new BABYLON.Vector3(
-                this.objectScale,
-                this.objectScale,
-                this.objectScale
-            );
-        }
+        // TODO: Questa logica dovrebbe applicarsi a un oggetto selezionato nel mondo WebXR,
+        // non all'oggetto generico this.app.arManager.arObject che ora è usato per l'anteprima/piazzamento.
+        this.app.log("Slider scala modificato, ma non applicato (logica WebXR mancante).");
     }
-    
+
     /**
-     * Gestisce il cambio di rotazione
+     * Gestisce il cambio di rotazione (Effetto limitato in WebXR senza oggetto selezionato)
      */
     onRotationChange() {
         this.objectRotation = parseInt(this.rotationSlider.value);
         this.rotationValue.textContent = this.objectRotation + '°';
-        
-        // Aggiorna l'oggetto virtuale se presente
-        if (this.app.arManager.arObject && this.nearbyObjects.length > 0) {
-            this.app.arManager.arObject.rotation = new BABYLON.Vector3(
-                0,
-                BABYLON.Tools.ToRadians(this.objectRotation),
-                0
-            );
-        }
+        // TODO: Questa logica dovrebbe applicarsi a un oggetto selezionato nel mondo WebXR.
+        this.app.log("Slider rotazione modificato, ma non applicato (logica WebXR mancante).");
     }
     
     /**
