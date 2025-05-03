@@ -74,11 +74,10 @@ class ARManager {
             // Configura fotocamera
             await this.setupCamera(video);
 
-            // Crea un layer per mostrare il video come sfondo (risolve ghosting)
-            const backgroundLayer = new BABYLON.Layer("cameraBackgroundLayer", null, this.scene, true);
-            backgroundLayer.texture = this.videoTexture;
-            backgroundLayer.isBackground = true;
-            backgroundLayer.texture.vScale = -1; // Correggiamo l'orientamento del video
+            // Imposta la texture video come sfondo diretto della scena
+            this.scene.backgroundTexture = this.videoTexture;
+            // Iniziamo senza inversione, la applicheremo se necessario
+            // this.scene.backgroundTexture.vScale = -1;
 
             // Avvia il loop di rendering e aggiornamento camera/oggetti
             this.startRenderLoop();
@@ -145,8 +144,8 @@ class ARManager {
         if (!this.engine) return;
         this.engine.runRenderLoop(() => {
             if (this.scene && this.scene.activeCamera) {
-                // Forza la pulizia dei buffer per evitare ghosting/scie
-                this.engine.clear(this.scene.clearColor, true, true, true);
+                // Non forziamo la pulizia qui per ora, concentriamoci sulla camera
+                // this.engine.clear(this.scene.clearColor, true, true, true);
 
                 // Aggiorna l'orientamento della camera in base alla bussola
                 this.updateCameraOrientation();
