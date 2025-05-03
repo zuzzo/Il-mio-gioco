@@ -97,11 +97,11 @@ class StorageManager {
     }
     
     /**
-     * Rimuove un oggetto
-     * @param {string} objectId - ID dell'oggetto da rimuovere
-     * @returns {boolean} True se l'oggetto è stato rimosso
+     * Elimina un oggetto
+     * @param {string} objectId - ID dell'oggetto da eliminare
+     * @returns {boolean} True se l'oggetto è stato eliminato
      */
-    removeObject(objectId) {
+    deleteObject(objectId) {
         const initialLength = this.objects.length;
         this.objects = this.objects.filter(obj => obj.id !== objectId);
         

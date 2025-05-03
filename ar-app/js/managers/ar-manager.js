@@ -340,55 +340,17 @@ class ARManager {
                          this.scene
                      );
                      
+                     // Usa il metodo comune per elaborare l'oggetto
                      this.processPlacedObject(result, objectData);
+                     // Aggiorna la posizione e l'orientamento
+                     this.updateObjectPosition(objectData);
                      return;
                  } catch (error) {
                      throw new Error(`Errore caricamento modello personalizzato: ${error.message}`);
                  }
              }
 
-             // Calcola posizione relativa (esempio molto semplificato)
-             const userPos = this.app.geoManager.currentPosition;
-             const objectPos = objectData.position;
-             const distance = this.app.geoManager.calculateDistance(
-                 userPos.latitude, userPos.longitude,
-                 objectPos.latitude, objectPos.longitude
-             );
-             const bearing = this.app.geoManager.calculateBearing(
-                 userPos.latitude, userPos.longitude,
-                 objectPos.latitude, objectPos.longitude
-             );
-             const userHeading = this.app.geoManager.currentOrientation?.alpha || 0;
-
-             // Direzione relativa dell'oggetto rispetto all'utente
-             const relativeBearing = (bearing - userHeading + 360) % 360;
-             const relativeBearingRad = BABYLON.Tools.ToRadians(relativeBearing);
-
-             // Posizionamento semplificato a distanza fissa nella direzione relativa
-             const placementDistance = Math.min(distance, 5); // Mostra più vicino se è lontano, max 5m
-             const x = Math.sin(relativeBearingRad) * placementDistance;
-             const z = Math.cos(relativeBearingRad) * placementDistance;
-             const y = 0; // Altezza dal suolo (da migliorare con hit-testing o ancoraggio)
-
-             this.app.log(`Mostrando oggetto ${objectData.name} a distanza ${distance.toFixed(1)}m, direzione relativa ${relativeBearing.toFixed(1)}°`);
-
              // Carica il modello
-             let rootUrl = "";
-             let fileName = objectData.modelPath;
-             // Gestione path per modelli predefiniti vs custom
-             if (!objectData.isCustomModel && typeof fileName === 'string') {
-                 const lastSlash = fileName.lastIndexOf('/');
-                 if (lastSlash !== -1) {
-                     rootUrl = fileName.substring(0, lastSlash + 1);
-                     fileName = fileName.substring(lastSlash + 1);
-                 }
-             } else if (objectData.isCustomModel) {
-                 // Se custom, modelPath potrebbe essere un URL Blob, gestito da ImportMeshAsync
-                 rootUrl = ""; // Nessun rootUrl per Blob
-                 fileName = objectData.modelPath;
-             }
-
-
              try {
                  // Usa l'approccio della versione alfa che funzionava senza problemi CORS
                  const result = await BABYLON.SceneLoader.ImportMeshAsync(
@@ -399,7 +361,9 @@ class ARManager {
                  );
                  
                  // Usa il metodo comune per elaborare l'oggetto
-                 this.processPlacedObject(result, objectData, x, y, z);
+                 this.processPlacedObject(result, objectData);
+                 // Aggiorna la posizione e l'orientamento
+                 this.updateObjectPosition(objectData);
                  
              } catch (error) {
                  // Gestione degli errori di caricamento
@@ -408,7 +372,9 @@ class ARManager {
                      this.app.showMessage("Usando un oggetto semplificato. Nell'app finale verranno mostrati i modelli 3D completi.");
                      
                      // Fallback: crea un cubo colorato come nella versione alfa
-                     this.createFallbackObject(objectData, x, y, z);
+                     this.createFallbackObject(objectData);
+                     // Aggiorna la posizione e l'orientamento
+                     this.updateObjectPosition(objectData);
                      return;
                  }
                  throw error;
@@ -573,5 +539,45 @@ class ARManager {
         
         this.app.log(`Creato oggetto fallback per l'anteprima di ${modelPath}`);
         this.app.showMessage("Usando un'anteprima semplificata. Nell'app finale verranno mostrati i modelli 3D completi.");
+    }
+    /**
+     * Aggiorna la posizione e l'orientamento di un oggetto piazzato
+     * @param {Object} objectData - Dati dell'oggetto
+     */
+    updateObjectPosition(objectData) {
+        if (!this.virtualObject || !this.app.geoManager.currentPosition) return;
+        
+        // Calcola posizione relativa
+        const userPos = this.app.geoManager.currentPosition;
+        const objectPos = objectData.position;
+        const distance = this.app.geoManager.calculateDistance(
+            userPos.latitude, userPos.longitude,
+            objectPos.latitude, objectPos.longitude
+        );
+        const bearing = this.app.geoManager.calculateBearing(
+            userPos.latitude, userPos.longitude,
+            objectPos.latitude, objectPos.longitude
+        );
+        const userHeading = this.app.geoManager.currentOrientation?.alpha || 0;
+
+        // Direzione relativa dell'oggetto rispetto all'utente
+        const relativeBearing = (bearing - userHeading + 360) % 360;
+        const relativeBearingRad = BABYLON.Tools.ToRadians(relativeBearing);
+
+        // Posizionamento semplificato a distanza fissa nella direzione relativa
+        const placementDistance = Math.min(distance, 20); // Limita la distanza massima
+        const x = Math.sin(relativeBearingRad) * placementDistance;
+        const z = Math.cos(relativeBearingRad) * placementDistance;
+        const y = 0; // Altezza dal suolo (da migliorare)
+
+        // Aggiorna la posizione dell'oggetto
+        this.virtualObject.position = new BABYLON.Vector3(x, y, z);
+        
+        // Applica la rotazione salvata (orientamento iniziale)
+        // Nota: la rotazione Y è negativa rispetto all'orientamento della bussola
+        const orientationRadians = (objectData.rotation * Math.PI) / 180;
+        this.virtualObject.rotation.y = -orientationRadians;
+        
+        this.app.log(`Oggetto ${objectData.name} aggiornato - Dist: ${distance.toFixed(1)}m, RelBearing: ${relativeBearing.toFixed(1)}°`);
     }
 } // Chiusura della classe ARManager

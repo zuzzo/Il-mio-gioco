@@ -262,8 +262,15 @@ class Menu3 {
 
     onDeleteObjectClick() {
         if (this.selectedObjectId && confirm("Sei sicuro di voler eliminare l'oggetto?")) {
-            this.app.storageManager.deleteObject(this.selectedObjectId);
-            this.deselectObject();
+            const deleted = this.app.storageManager.deleteObject(this.selectedObjectId);
+            if (deleted) {
+                this.app.log(`Oggetto ${this.selectedObjectId} eliminato.`);
+                this.deselectObject();
+                this.updateMap(); // Aggiorna la mappa per rimuovere il marker
+            } else {
+                this.app.log(`Errore nell'eliminazione dell'oggetto ${this.selectedObjectId}.`);
+                this.app.showMessage("Errore durante l'eliminazione dell'oggetto.");
+            }
         }
     }
 
