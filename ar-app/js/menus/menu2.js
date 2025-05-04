@@ -229,14 +229,18 @@ class Menu2 {
         const object = {
             modelPath: this.selectedModelPath,
             isCustomModel: selectedModel && selectedModel.type === 'custom',
+            // Posizione GPS al momento del piazzamento
             position: {...this.app.geoManager.currentPosition},
-            orientation: this.app.geoManager.currentOrientation ? 
+            // Orientamento Bussola al momento del piazzamento
+            orientation: this.app.geoManager.currentOrientation ?
                 {...this.app.geoManager.currentOrientation} : null,
             scale: this.objectScale,
-            rotation: this.objectRotation,
+            // Rotazione visuale impostata dalla slider
+            visualRotation: this.objectRotation,
             name: modelName
-            // NOTA: La posizione e l'orientamento GPS/Bussola non sono più usati
-            // direttamente per il piazzamento con WebXR/Hit-Test.
+            // NOTA: La posizione e l'orientamento GPS/Bussola sono ora salvati,
+            // ma il piazzamento iniziale avviene ancora tramite WebXR/Hit-Test.
+            // La logica di visualizzazione futura userà i dati salvati.
             // Potremmo salvarli come riferimento, ma il posizionamento reale
             // avviene nel mondo 3D rilevato da WebXR.
         };
@@ -251,14 +255,17 @@ class Menu2 {
 
             // TODO: Salvare l'oggetto nello storageManager con le coordinate WebXR
             // Questo richiede di decidere come rappresentare/salvare le coordinate
-            // del mondo WebXR (che sono relative al punto di partenza della sessione).
-            // Per ora, logghiamo e mostriamo un messaggio.
+            // Salva l'oggetto nello storage con i dati GPS e di orientamento
+            const savedObjectId = this.app.storageManager.addObject(object);
+            this.app.log(`Oggetto salvato con ID: ${savedObjectId}, Pos: ${JSON.stringify(object.position)}, Orient: ${JSON.stringify(object.orientation)}`);
 
-            this.app.showMessage(`Oggetto "${object.name}" piazzato con successo tramite WebXR!`);
+            // Messaggio di successo
+            this.app.showMessage(`Oggetto "${object.name}" piazzato e salvato con successo!`);
             this.app.log(`Oggetto piazzato (WebXR): ${object.name} a ${position.x.toFixed(2)}, ${position.y.toFixed(2)}, ${position.z.toFixed(2)}`);
 
-            // Potremmo voler "dimenticare" l'oggetto piazzato per permetterne altri
-            // this.app.arManager.arObject = null;
+            // TODO: Considerare se l'oggetto piazzato (placedMesh) debba rimanere
+            // visibile o se debba essere rimosso in attesa della logica di
+            // visualizzazione basata sullo storage. Per ora lo lasciamo.
         } else {
              this.app.showMessage(`Errore durante il piazzamento dell'oggetto "${object.name}".`);
              this.app.log(`Fallito piazzamento WebXR per: ${object.name}`);

@@ -11,8 +11,15 @@ class ARManager {
         this.xrExperience = null; // Oggetto esperienza WebXR
         this.hitTestMarker = null; // Mesh per visualizzare il punto di hit-test
         this.planeMeshes = {}; // Oggetto per memorizzare i mesh dei piani rilevati
-        this.arObject = null; // Oggetto 3D attualmente visualizzato (anteprima o piazzato)
-        this.currentPlacedObjectData = null; // Dati dell'oggetto piazzato (per riferimento, non per posizionamento continuo)
+        this.arObject = null; // Oggetto 3D di anteprima o piazzato *manualmente*
+        // this.currentPlacedObjectData = null; // Non più usato in questo modo
+
+        // Oggetti AR attualmente visualizzati basati sulla geolocalizzazione
+        this.displayedObjects = {}; // Mappa: { objectId: babylonMesh }
+
+        // Controllo periodico visibilità
+        this.lastCheckTime = 0;
+        this.checkInterval = 1000; // Millisecondi (controlla ogni secondo)
 
         // Stato
         this.arActive = false;
@@ -214,17 +221,185 @@ class ARManager {
 
 
     /**
-     * Avvia il loop di rendering
+     * Avvia il loop di rendering e il controllo degli oggetti visibili
      */
     startRenderLoop() {
         if (!this.engine) return;
+
         this.engine.runRenderLoop(() => {
-            if (this.scene && this.scene.activeCamera) {
-                // Il rendering e la pulizia sono gestiti da WebXR quando in sessione
+            if (this.scene && this.scene.activeCamera && this.arActive) {
+                const now = Date.now();
+
+                // --- Controllo periodico oggetti visibili ---
+                if (now - this.lastCheckTime > this.checkInterval) {
+                    this.lastCheckTime = now;
+                    this.updateVisibleObjects(); // Chiama la nuova funzione di aggiornamento
+                }
+
+                // --- Rendering della scena ---
                 this.scene.render();
+            } else if (this.scene) {
+                 // Renderizza anche se non in AR per eventuali elementi UI o scene fallback
+                 this.scene.render();
             }
         });
         this.app.log("Loop di rendering avviato.");
+    }
+
+    /**
+     * Controlla quali oggetti dovrebbero essere visibili e aggiorna la scena.
+     * Chiamato periodicamente dal render loop.
+     */
+    updateVisibleObjects() {
+        if (!this.app.geoManager || !this.app.storageManager) return;
+
+        // Ottieni gli oggetti nel raggio di 10 metri
+        const visibleObjectsData = this.app.geoManager.getVisibleObjects(10);
+        const visibleObjectIds = new Set(visibleObjectsData.map(obj => obj.id));
+        const currentlyDisplayedIds = new Set(Object.keys(this.displayedObjects));
+
+        // Oggetti da aggiungere: sono in visible ma non in displayed
+        visibleObjectsData.forEach(objData => {
+            if (!currentlyDisplayedIds.has(objData.id)) {
+                this.app.log(`Oggetto ${objData.id} (${objData.name}) entrato nel raggio. Tentativo di visualizzazione.`);
+                this.displayARObject(objData);
+            }
+        });
+
+        // Oggetti da rimuovere: sono in displayed ma non più in visible
+        currentlyDisplayedIds.forEach(displayedId => {
+            if (!visibleObjectIds.has(displayedId)) {
+                this.app.log(`Oggetto ${displayedId} uscito dal raggio. Rimozione.`);
+                this.removeARObject(displayedId);
+            }
+        });
+    }
+
+    /**
+     * Carica e visualizza un oggetto AR nella scena, posizionandolo
+     * secondo la logica di ancoraggio (Image Tracking o fallback).
+     * @param {Object} objectData - Dati dell'oggetto da storageManager.
+     */
+    async displayARObject(objectData) {
+        // Evita di caricare lo stesso oggetto più volte
+        if (this.displayedObjects[objectData.id]) {
+            // this.app.log(`Oggetto ${objectData.id} già visualizzato.`);
+            return;
+        }
+
+        this.app.log(`Tentativo di caricare e visualizzare ${objectData.name} (ID: ${objectData.id})`);
+
+        // TODO: Implementare Image Tracking qui come priorità
+
+        // --- Fallback: Posizionamento basato su GPS/Bussola (Semplificato per ora) ---
+        try {
+            const result = await BABYLON.SceneLoader.ImportMeshAsync("", "", objectData.modelPath, this.scene);
+            const mesh = result.meshes[0];
+            mesh.name = `ar_object_${objectData.id}`; // Assegna un nome univoco
+
+            // 1. Calcola Scala (usando la logica di placeObjectAtHitTest per coerenza)
+            const boundingInfo = this.calculateBoundingInfo(result.meshes);
+            const maxDimension = Math.max(
+                boundingInfo.maximum.x - boundingInfo.minimum.x,
+                boundingInfo.maximum.y - boundingInfo.minimum.y,
+                boundingInfo.maximum.z - boundingInfo.minimum.z
+            );
+            // Assicurati che maxDimension non sia zero o troppo piccolo
+             const safeMaxDimension = Math.max(maxDimension, 0.01);
+            const scaleFactor = objectData.scale * (0.5 / safeMaxDimension); // Adatta scala base (0.5 è un valore arbitrario)
+            mesh.scaling = new BABYLON.Vector3(scaleFactor, scaleFactor, scaleFactor);
+            this.app.log(`Scala applicata a ${objectData.id}: ${scaleFactor.toFixed(3)} (base: ${objectData.scale})`);
+
+            // 2. Calcola Orientamento (relativo al Nord)
+            let targetRotationY = 0;
+            if (objectData.orientation && typeof objectData.orientation.alpha === 'number') {
+                 // L'orientamento salvato (alpha) è rispetto al Nord.
+                 // Vogliamo che l'oggetto punti in quella direzione assoluta.
+                 // La rotazione Y in Babylon.js è 0 lungo l'asse Z positivo.
+                 // Se alpha=0 è Nord, alpha=90 è Est (rotazione Y = -90° o 270°), alpha=180 è Sud (rotazione Y = 180°), alpha=270 è Ovest (rotazione Y = 90°)
+                 // Quindi, la rotazione Y desiderata è -alpha (o 360-alpha).
+                 targetRotationY = (360 - objectData.orientation.alpha) % 360;
+                 this.app.log(`Orientamento target per ${objectData.id}: ${objectData.orientation.alpha.toFixed(1)}° Nord -> Rotazione Y: ${targetRotationY.toFixed(1)}°`);
+            } else {
+                 this.app.log(`Orientamento non disponibile per ${objectData.id}, usando 0°`);
+            }
+            const rotationRadiansY = BABYLON.Tools.ToRadians(targetRotationY);
+            mesh.rotation = new BABYLON.Vector3(0, rotationRadiansY, 0);
+
+            // 3. Calcola Posizione Relativa GPS
+            let targetPosition = new BABYLON.Vector3(0, 0, 2); // Posizione di fallback
+            const userPos = this.app.geoManager.currentPosition;
+            const userHeading = this.app.geoManager.currentOrientation?.alpha; // Gradi da Nord
+
+            if (userPos && typeof userHeading === 'number' && objectData.position && this.scene.activeCamera) {
+                const objLat = objectData.position.latitude;
+                const objLon = objectData.position.longitude;
+                const userLat = userPos.latitude;
+                const userLon = userPos.longitude;
+
+                // Calcola offset Nord/Est in metri
+                const deltaNorth = this.app.geoManager.calculateLatitudeDistance(userLat, objLat);
+                const deltaEast = this.app.geoManager.calculateLongitudeDistance(userLon, objLon, userLat);
+
+                // Angolo dell'utente rispetto al Nord (in radianti)
+                const userHeadingRad = BABYLON.Tools.ToRadians(userHeading);
+
+                // Ruota l'offset per allinearlo alla vista dell'utente
+                // Angolo di rotazione necessario = -userHeadingRad
+                const angle = -userHeadingRad;
+                const cosAngle = Math.cos(angle);
+                const sinAngle = Math.sin(angle);
+
+                // Calcola offset relativo X (destra/sinistra) e Z (avanti/indietro)
+                // Assumendo X = Est ruotato, Z = Nord ruotato
+                const relativeX = deltaEast * cosAngle - deltaNorth * sinAngle;
+                const relativeZ = deltaEast * sinAngle + deltaNorth * cosAngle;
+
+                // Posizione target = Posizione camera + offset relativo
+                // Manteniamo la Y della camera per ora (oggetto fluttuante all'altezza degli occhi)
+                // TODO: Proiettare su un piano rilevato vicino a questa posizione
+                targetPosition = this.scene.activeCamera.position.add(new BABYLON.Vector3(relativeX, 0, relativeZ));
+
+                this.app.log(`Posizione calcolata per ${objectData.id}: dN=${deltaNorth.toFixed(1)}m, dE=${deltaEast.toFixed(1)}m -> rX=${relativeX.toFixed(1)}m, rZ=${relativeZ.toFixed(1)}m -> World=${targetPosition.x.toFixed(1)},${targetPosition.y.toFixed(1)},${targetPosition.z.toFixed(1)}`);
+
+            } else {
+                this.app.log(`Dati GPS/Heading/Camera insufficienti per calcolo posizione ${objectData.id}. Usando fallback.`);
+                if (this.scene.activeCamera) {
+                     const forwardDirection = this.scene.activeCamera.getDirection(BABYLON.Vector3.Forward());
+                     const forwardXZ = new BABYLON.Vector3(forwardDirection.x, 0, forwardDirection.z).normalize();
+                     targetPosition = this.scene.activeCamera.position.add(forwardXZ.scale(2));
+                }
+            }
+            mesh.position = targetPosition;
+
+
+            // 4. Aggiungi alla mappa degli oggetti visualizzati
+            this.displayedObjects[objectData.id] = mesh;
+            this.app.log(`Oggetto ${objectData.id} (${objectData.name}) visualizzato con successo (orientamento applicato, posizione placeholder).`);
+
+        } catch (error) {
+            console.error(`Errore durante la visualizzazione dell'oggetto ${objectData.id}:`, error);
+            this.app.log(`Errore visualizzazione ${objectData.name}: ${error.message}`);
+            // Assicurati che non rimanga nella mappa se il caricamento fallisce
+            if (this.displayedObjects[objectData.id]) {
+                delete this.displayedObjects[objectData.id];
+            }
+        }
+    }
+
+    /**
+     * Rimuove un oggetto AR dalla scena.
+     * @param {string} objectId - ID dell'oggetto da rimuovere.
+     */
+    removeARObject(objectId) {
+        const mesh = this.displayedObjects[objectId];
+        if (mesh) {
+            mesh.dispose(); // Rimuovi dalla scena e libera risorse
+            delete this.displayedObjects[objectId]; // Rimuovi dalla mappa
+            this.app.log(`Oggetto ${objectId} rimosso dalla scena.`);
+        } else {
+            this.app.log(`Tentativo di rimuovere oggetto ${objectId} non trovato nella scena.`);
+        }
     }
 
     /**
@@ -390,17 +565,68 @@ class ARManager {
         return new BABYLON.BoundingInfo(min, max);
     }
 
-    // --- METODI OBSOLETI (BASATI SU GPS/BUSSOLA) ---
-    /*
-    updateCameraOrientation() { ... }
-    updateObjectPosition(objectData) { ... }
-    */
+    // --- METODI OBSOLETI O DA RIVEDERE ---
+
+    /* updatePreviewObject: Probabilmente non più necessario se la preview è gestita diversamente */
+    /* showPlacedObject: Sostituito dalla logica in updateVisibleObjects/displayARObject */
+    /* placeObjectAtHitTest: Usato solo per il piazzamento iniziale in Menu2, non per la visualizzazione continua */
+
+    // --- METODO PER IMAGE TRACKING (DA IMPLEMENTARE) ---
+    enableImageTracking(referenceImages) {
+         if (!this.xrExperience || !this.xrExperience.baseExperience) return false;
+         const featuresManager = this.xrExperience.baseExperience.featuresManager;
+
+         try {
+             const imageTrackingFeature = featuresManager.enableFeature(BABYLON.WebXRImageTracking, "latest", {
+                 images: referenceImages // Array di { src: "url", estimatedWidthInMeters: width }
+             });
+
+             if (!imageTrackingFeature) {
+                 this.app.log("Impossibile abilitare WebXRImageTracking.");
+                 return false;
+             }
+
+             this.app.log("WebXR Image Tracking abilitato.");
+
+             imageTrackingFeature.onTrackedImageUpdatedObservable.add((image) => {
+                 // L'immagine è stata rilevata o aggiornata
+                 this.app.log(`Immagine tracciata: ${image.id}, Posizione: ${image.transformationMatrix.getTranslation()}`);
+                 // TODO: Qui dovremmo associare l'immagine tracciata all'oggetto AR corretto
+                 // e aggiornare la posizione/rotazione del mesh di quell'oggetto.
+                 // Potremmo usare image.id o un nome associato all'immagine.
+                 const objectToUpdate = this.findObjectByImageAnchor(image.id); // Funzione da creare
+                 if (objectToUpdate && this.displayedObjects[objectToUpdate.id]) {
+                     const mesh = this.displayedObjects[objectToUpdate.id];
+                     mesh.position.copyFrom(image.transformationMatrix.getTranslation());
+                     mesh.rotationQuaternion.copyFrom(BABYLON.Quaternion.FromRotationMatrix(image.transformationMatrix.getRotationMatrix()));
+                     // Potrebbe essere necessario applicare un offset o rotazione aggiuntiva
+                 }
+             });
+
+             return true;
+         } catch (error) {
+             console.error("Errore durante l'abilitazione di Image Tracking:", error);
+             this.app.log(`Errore Image Tracking: ${error.message}`);
+             return false;
+         }
+    }
+
+    // Funzione helper (da implementare o adattare)
+    findObjectByImageAnchor(imageId) {
+        // Cerca tra gli oggetti in this.app.storageManager.getAllObjects()
+        // quello che ha un campo tipo 'imageAnchorId' === imageId
+        return null; // Placeholder
+    }
+
 
     // --- METODO PLACEHOLDER ---
+    // Questo metodo probabilmente non ha più senso con WebXR Image Tracking
     setImageAnchorEnabled(enabled) {
-        this.app.log(`Ancoraggio immagini (non WebXR) ${enabled ? 'attivato' : 'disattivato'} - Funzionalità non applicabile con WebXR.`);
+        this.app.log(`Toggle Ancoraggio Immagini premuto: ${enabled}. La gestione avviene tramite WebXR Image Tracking ora.`);
+        // Potremmo voler attivare/disattivare la feature WebXR qui, ma è complesso.
+        // Meglio abilitarla all'inizio se si prevede di usarla.
         if (enabled) {
-            this.app.showMessage("L'ancoraggio immagini non è gestito tramite questo toggle in modalità WebXR.");
+             this.app.showMessage("L'ancoraggio alle immagini è gestito automaticamente da WebXR se configurato.");
         }
     }
 }

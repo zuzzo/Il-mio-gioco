@@ -8,11 +8,11 @@ class App {
         this.mapView = document.getElementById('map-view');
         this.debugPanel = document.getElementById('debug-panel');
         this.debugContent = document.getElementById('debug-content');
-
-        // Manager
-        this.geoManager = new GeoManager();
-        // Istanzia ARManager passando l'istanza dell'app per la comunicazione (es. showMessage)
-        this.arManager = new ARManager(this);
+ 
+         // Manager
+         this.storageManager = new StorageManager();
+         this.geoManager = new GeoManager(this); // Passa l'istanza dell'app
+         this.arManager = new ARManager(this); // Passa l'istanza dell'app
         this.storageManager = new StorageManager();
 
         // Menu

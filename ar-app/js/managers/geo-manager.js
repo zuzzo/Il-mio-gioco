@@ -1,8 +1,10 @@
 /**
- * Gestisce la geolocalizzazione, l'orientamento e il calcolo delle distanze
+ * Gestisce la geolocalizzazione, l'orientamento, il calcolo delle distanze
+ * e l'identificazione degli oggetti vicini.
  */
 class GeoManager {
-    constructor() {
+    constructor(app) { // Aggiunto riferimento all'app principale
+        this.app = app; // Memorizza riferimento all'app
         this.currentPosition = null;
         this.currentOrientation = null;
         this.watchId = null;
@@ -377,6 +379,47 @@ class GeoManager {
         const Δλ = (lon2 - lon1) * Math.PI / 180;
 
         return R * Math.cos(φ) * Δλ;
+    }
+
+    /**
+     * Ottiene gli oggetti salvati che si trovano entro una certa distanza dalla posizione attuale.
+     * @param {number} maxDistance - La distanza massima in metri per considerare un oggetto "visibile".
+     * @returns {Array} Lista di oggetti visibili (con aggiunta della proprietà 'distance').
+     */
+    getVisibleObjects(maxDistance = 10) { // Impostato default a 10 metri
+        if (!this.currentPosition || !this.app || !this.app.storageManager) {
+            console.warn("Posizione attuale o storageManager non disponibili per getVisibleObjects.");
+            return [];
+        }
+
+        const allObjects = this.app.storageManager.getAllObjects();
+        const visibleObjects = [];
+
+        allObjects.forEach(obj => {
+            // Assicurati che l'oggetto abbia una posizione salvata
+            if (obj.position && typeof obj.position.latitude === 'number' && typeof obj.position.longitude === 'number') {
+                const distance = this.calculateDistance(
+                    this.currentPosition.latitude,
+                    this.currentPosition.longitude,
+                    obj.position.latitude,
+                    obj.position.longitude
+                );
+
+                if (distance <= maxDistance) {
+                    visibleObjects.push({
+                        ...obj,
+                        distance // Aggiunge la distanza calcolata all'oggetto
+                    });
+                }
+            } else {
+                console.warn(`Oggetto con ID ${obj.id} non ha dati di posizione validi.`);
+            }
+        });
+
+        // Ordina per distanza (opzionale, ma utile)
+        visibleObjects.sort((a, b) => a.distance - b.distance);
+
+        return visibleObjects;
     }
 }
 
