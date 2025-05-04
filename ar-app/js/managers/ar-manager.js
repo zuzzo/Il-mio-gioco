@@ -114,6 +114,42 @@ class ARManager {
     }
 
     /**
+     * Tenta di entrare nella sessione WebXR 'immersive-ar'.
+     * Chiamato quando si entra in un menu che richiede AR.
+     */
+    async enterARSession() {
+        if (!this.xrExperience || !this.xrExperience.baseExperience) {
+            this.app.log("AR Manager non inizializzato correttamente, impossibile entrare in sessione.");
+            this.app.showMessage("Errore: Sistema AR non pronto.");
+            return;
+        }
+
+        if (this.xrExperience.baseExperience.state === BABYLON.WebXRState.IN_XR) {
+            this.app.log("Già in sessione XR.");
+            this.arActive = true; // Assicura che lo stato sia corretto
+            return; // Già in sessione
+        }
+
+        if (this.xrExperience.baseExperience.state === BABYLON.WebXRState.ENTERING_XR) {
+            this.app.log("Entrata in sessione XR già in corso...");
+            return; // Già in entrata
+        }
+
+        try {
+            this.app.log("Tentativo di entrare in sessione WebXR 'immersive-ar'...");
+            // Il metodo enterXRAsync gestisce la richiesta all'utente (es. popup del browser)
+            await this.xrExperience.baseExperience.enterXRAsync('immersive-ar', 'local-floor');
+            this.app.log("Sessione WebXR avviata con successo.");
+            this.arActive = true;
+        } catch (error) {
+            console.error("Errore durante l'entrata nella sessione XR:", error);
+            this.app.log(`Errore entrata sessione XR: ${error.message}`);
+            this.app.showMessage("Impossibile avviare la modalità AR. Assicurati di aver dato i permessi necessari.");
+            this.arActive = false;
+        }
+    }
+
+    /**
      * Abilita e configura la feature Hit-Testing di WebXR
      */
     enableHitTesting() {
@@ -619,16 +655,24 @@ class ARManager {
     }
 
 
-    // --- METODO PLACEHOLDER ---
-    // Questo metodo probabilmente non ha più senso con WebXR Image Tracking
-    setImageAnchorEnabled(enabled) {
-        this.app.log(`Toggle Ancoraggio Immagini premuto: ${enabled}. La gestione avviene tramite WebXR Image Tracking ora.`);
-        // Potremmo voler attivare/disattivare la feature WebXR qui, ma è complesso.
-        // Meglio abilitarla all'inizio se si prevede di usarla.
-        if (enabled) {
-             this.app.showMessage("L'ancoraggio alle immagini è gestito automaticamente da WebXR se configurato.");
+    /**
+     * Inizializza automaticamente la modalità AR
+     */
+    async autoEnableAR() {
+        try {
+            await this.init('render-canvas');
+            this.app.log("Modalità AR attivata automaticamente");
+            return true;
+        } catch (error) {
+            this.app.log(`Errore nell'attivazione automatica AR: ${error.message}`);
+            return false;
         }
     }
+
+    // Rimuovi il metodo obsoleto
+    /* setImageAnchorEnabled(enabled) {
+        // Metodo rimosso
+    } */
 }
 
 // Esporta la classe

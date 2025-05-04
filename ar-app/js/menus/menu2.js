@@ -17,7 +17,7 @@ class Menu2 {
         this.confirmPlaceBtn = document.getElementById('confirm-place-btn');
         this.backBtn = document.getElementById('back-menu1-btn');
         this.debugBtn = document.getElementById('debug-btn2');
-        this.imageAnchorToggle = document.getElementById('image-anchor-toggle2');
+        // Rimosso: this.imageAnchorToggle = document.getElementById('image-anchor-toggle2');
         
         // Stato
         this.selectedModelPath = this.objectSelect ? this.objectSelect.value : '';
@@ -33,7 +33,7 @@ class Menu2 {
         this.onConfirmPlaceClick = this.onConfirmPlaceClick.bind(this);
         this.onBackClick = this.onBackClick.bind(this);
         this.onDebugClick = this.onDebugClick.bind(this);
-        this.onImageAnchorToggle = this.onImageAnchorToggle.bind(this);
+        // Rimosso: this.onImageAnchorToggle = this.onImageAnchorToggle.bind(this);
     }
     
     /**
@@ -51,7 +51,7 @@ class Menu2 {
         this.confirmPlaceBtn.addEventListener('click', this.onConfirmPlaceClick);
         this.backBtn.addEventListener('click', this.onBackClick);
         this.debugBtn.addEventListener('click', this.onDebugClick);
-        this.imageAnchorToggle.addEventListener('change', this.onImageAnchorToggle);
+        // Rimosso: this.imageAnchorToggle.addEventListener('change', this.onImageAnchorToggle);
         
         // Imposta il modello iniziale
         if (this.objectSelect && this.objectSelect.options.length > 0) {
@@ -106,8 +106,8 @@ class Menu2 {
         // Aggiorna la preview
         this.updatePreview();
         
-        // Aggiorna lo stato del toggle
-        this.imageAnchorToggle.checked = this.app.arManager.imageAnchorEnabled;
+        // Avvia la sessione AR automaticamente se non già attiva
+        this.app.arManager.enterARSession();
     }
     
     /**
@@ -293,14 +293,7 @@ class Menu2 {
         this.app.showDebugPanel();
     }
     
-    /**
-     * Gestisce il toggle per l'ancoraggio delle immagini
-     */
-    onImageAnchorToggle(event) {
-        const enabled = event.target.checked;
-        this.app.arManager.setImageAnchorEnabled(enabled);
-        this.app.log("Ancoraggio immagini: " + (enabled ? "attivato" : "disattivato"));
-    }
+    // Rimosso: onImageAnchorToggle(event) { ... }
     
     /**
      * Ottiene un nome leggibile per il modello
